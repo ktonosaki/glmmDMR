@@ -22,6 +22,10 @@
 6. `DMR_merge.R` で DMR 統合
 7. 必要に応じて bigWig 可視化
 
+実行単位の目安:
+- ステップ 2〜3（= Section 3.1〜3.2）は「サンプルごと」に実行します。
+- ステップ 4（= Section 3.3）で、複数サンプルの結果を群ごとにまとめて統合します。
+
 ## 2. Upstream analysis example (before glmmDMR)
 
 以下は、`glmmDMR` に入力する前段でよく使う Bismark ベースの最小例です。
@@ -29,33 +33,33 @@
 ```bash
 bismark \
   --bowtie2 \
-  -p ${core} \
-  -o ${out} \
-  ${ref} \
-  -1 ${read}/${fa}_1.trimed.fq.gz \
-  -2 ${read}/${fa}_2.trimed.fq.gz
+  -p 8 \
+  -o align \
+  /path/to/bismark_genome \
+  -1 clean/sample_1.trimmed.fq.gz \
+  -2 clean/sample_2.trimmed.fq.gz
 
-samtools view -@ ${core} -q 42 -b ${out}/${fa}_1.trimed_bismark_bt2_pe.bam | \
-  samtools sort -n -@ ${core} -o ${out}/${fa}.Q42.bam
+samtools view -@ 8 -q 42 -b align/sample_1.trimmed_bismark_bt2_pe.bam | \
+  samtools sort -n -@ 8 -o align/sample.Q42.bam
 
-mkdir -p ${call}/${fa}
+mkdir -p calls/sample
 
 # PCR deduplication
 deduplicate_bismark \
   --paired \
-  --output_dir ${out} \
+  --output_dir align \
   --bam \
-  ${out}/${fa}.Q42.bam
+  align/sample.Q42.bam
 
 # Call methylC
 bismark_methylation_extractor \
   --paired-end \
-  --output ${call}/${fa} \
-  --parallel ${core} \
+  --output calls/sample \
+  --parallel 8 \
   --buffer_size 30% \
   --gzip \
-  --genome_folder ${ref} \
-  ${out}/${fa}.Q42.deduplicated.bam
+  --genome_folder /path/to/bismark_genome \
+  align/sample.Q42.deduplicated.bam
 ```
 
 この出力（`CpG_*.txt.gz`, `CHG_*.txt.gz`, `CHH_*.txt.gz`）を、次節の `summarize_extractor.py` に入力します。
@@ -67,6 +71,9 @@ bismark_methylation_extractor \
 
 Purpose:
 - Bismark extractor 出力 (`*.txt.gz`) を context 横断で統合し、site 単位の集計表へ変換。
+
+Execution unit note:
+- このステップはサンプルごとに実行します（1サンプルにつき1つの summarized 出力）。
 
 Core processing:
 1. 入力ディレクトリ内の `CpG_*.txt.gz`, `CHG_*.txt.gz`, `CHH_*.txt.gz` を走査。
@@ -105,6 +112,9 @@ python summarize_extractor.py \
 
 Purpose:
 - site 単位で binomial test + BH-FDR 補正を行い、低信頼シグナルを抑制。
+
+Execution unit note:
+- このステップもサンプルごとに実行します（3.1 の各サンプル出力を個別に入力）。
 
 Core processing:
 1. 入力 TSV を読み込み。
@@ -151,6 +161,9 @@ python BinomTest.py \
 Purpose:
 - 2群比較用の sliding-window matrix を context 別に生成。
 
+Integration step note:
+- Section 3.1〜3.2 で各サンプルごとに作成した `*_binomtest_result.tsv.gz` を、ここで `--group1` / `--group2` にまとめて渡して統合します。
+
 Core processing:
 1. 引数を解析し、入力ファイル存在を確認。
 2. FASTA/FAI から `bedtools makewindows` で窓を作成。
@@ -175,7 +188,19 @@ Output format (`<g1>_<g2>_<ctx>_matrix.tsv.gz`):
 - 列順は `bedtools intersect -wa -wb` 由来の固定13列
 - 実質内容: window座標 + site座標/群/sample/strand/meth/unmeth/coverage
 
-Example:
+Example (2 samples total: 1 vs 1):
+```bash
+bash prepare_matrix.sh \
+  --fasta /path/to/TAIR10.fasta \
+  --group1 binom/WT_1_binomtest_result.tsv.gz \
+  --group2 binom/MT_1_binomtest_result.tsv.gz \
+  --group_labels WT MT \
+  --window 500 \
+  --slide 300 \
+  --output prep_out
+```
+
+Example (4 samples total: 2 vs 2):
 ```bash
 bash prepare_matrix.sh \
   --fasta /path/to/TAIR10.fasta \
