@@ -13,7 +13,7 @@ Core scripts:
 - `DMR_merge.R`: merge significant windows into DMRs.
   - Supported `--merge-mode`: `Simes`, `Stouffer`, `single_seed`, `multi_seed`, `hybrid_seed`.
 - `make_binned_methylation_bigwig.R` (optional): generate binned methylation bigWig.
-- `make_binned_variance_bigwig.R` (optional): generate binned variance bigWig.
+- `make_binned_variance_bigwig.py` (optional): generate binned variance bigWig.
 
 Simulation resources:
 
@@ -36,7 +36,7 @@ Optional executable flags:
 ```bash
 chmod +x summarize_extractor.py BinomTest.py prepare_matrix.sh
 chmod +x run_glmmDMR.R DMR_merge.R
-chmod +x make_binned_methylation_bigwig.R make_binned_variance_bigwig.R
+chmod +x make_binned_methylation_bigwig.R make_binned_variance_bigwig.py
 ```
 
 Python dependencies:
@@ -243,7 +243,7 @@ Rscript make_binned_methylation_bigwig.R \
 Variance bigWig:
 
 ```bash
-Rscript make_binned_variance_bigwig.R \
+python make_binned_variance_bigwig.py \
   --inputs rep1_CpG.bw rep2_CpG.bw rep3_CpG.bw rep4_CpG.bw \
   --output group_CpG.variance.bw \
   --bin-size 200 \
