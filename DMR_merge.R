@@ -10,84 +10,86 @@ suppressPackageStartupMessages({
 option_list <- list(
 
   # --- Input / Output ---
-  make_option(c("--windows"), type="character",
-              help="GLMM window-level results (tsv/tsv.gz). Required."),
-  make_option(c("--out-prefix"), type="character", default="results/dmr",
-              help="Output prefix for results [default %default]"),
+  make_option(c("--windows"), type = "character",
+              help = "GLMM window-level results (tsv/tsv.gz). Required."),
+  make_option(c("--out-prefix"), type = "character", default = "results/dmr",
+              help = "Output prefix for results [default %default]"),
 
   # --- Mode ---
-  make_option(c("--merge-mode"), type="character", default="hybrid_seed",
-              help="DMR merge strategy: single_seed, multi_seed, hybrid_seed [default %default]"),
+  make_option(c("--merge-mode"), type = "character", default = "hybrid_seed",
+              help = "DMR merge strategy: single_seed, multi_seed, hybrid_seed [default %default]"),
 
   # --- Seed / Extension (core detection parameters) ---
-  make_option(c("--p-seed"), type="numeric", default=0.05,
-              help="Seed p-value threshold for starting a DMR [default %default]"),
-  make_option(c("--p-extend"), type="numeric", default=0.05,
-              help="Extend p-value threshold for growing a DMR [default %default]"),
-  make_option(c("--max-gap-bp"), type="integer", default=200,
-              help="Max gap in bp to continue merging [default %default]"),
-  make_option(c("--min-windows"), type="integer", default=1,
-              help="Minimum windows for a DMR [default %default]"),
-  make_option(c("--min-delta"), type="numeric", default=0,
-              help="Minimum absolute delta for extension (effect size filter) [default %default]"),
-  make_option(c("--max-p-degradation"), type="numeric", default=1.2,
-              help="Maximum allowed p-value degradation during extension (1.0=no degradation) [default %default]"),
-  make_option(c("--max-final-p"), type="numeric", default=1.0,
-              help="Maximum final combined p-value for DMRs [default %default]"),
-  make_option(c("--min-strong-windows"), type="numeric", default=0.5,
-              help="Minimum fraction of windows with p <= p-seed in final DMR [default %default]"),
+  make_option(c("--p-seed"), type = "numeric", default = 0.05,
+              help = "Seed p-value threshold for starting a DMR [default %default]"),
+  make_option(c("--p-extend"), type = "numeric", default = 0.05,
+              help = "Extend p-value threshold for growing a DMR [default %default]"),
+  make_option(c("--max-gap-bp"), type = "integer", default = 200,
+              help = "Max gap in bp to continue merging [default %default]"),
+  make_option(c("--min-windows"), type = "integer", default = 1,
+              help = "Minimum windows for a DMR [default %default]"),
+  make_option(c("--min-delta"), type = "numeric", default = 0,
+              help = "Minimum absolute delta for extension (effect size filter) [default %default]"),
+  make_option(c("--max-p-degradation"), type = "numeric", default = 1.2,
+              help = "Maximum allowed p-value degradation during extension (1.0=no degradation) [default %default]"),
+  make_option(c("--max-final-p"), type = "numeric", default = 1.0,
+              help = "Maximum final combined p-value for DMRs [default %default]"),
+  make_option(c("--min-strong-windows"), type = "numeric", default = 0.5,
+              help = "Minimum fraction of windows with p <= p-seed in final DMR [default %default]"),
 
   # --- Adaptive delta threshold ---
-  make_option(c("--adaptive-delta"), action="store_true", default=FALSE,
-              help="Use adaptive delta threshold based on candidate DMR distribution [default %default]"),
-  make_option(c("--adaptive-delta-method"), type="character", default="median_ratio",
-              help="Adaptive delta method: median_ratio, q50, q25, q10, mad [default %default]"),
-  make_option(c("--adaptive-delta-ratio"), type="numeric", default=0.6,
-              help="Ratio for median_ratio method (0.6 = 60%% of median) [default %default]"),
+  make_option(c("--adaptive-delta"), action = "store_true", default = FALSE,
+              help = "Use adaptive delta threshold based on candidate DMR distribution [default %default]"),
+  make_option(c("--adaptive-delta-method"), type = "character", default = "median_ratio",
+              help = "Adaptive delta method: median_ratio, q50, q25, q10, mad [default %default]"),
+  make_option(c("--adaptive-delta-ratio"), type = "numeric", default = 0.6,
+              help = "Ratio for median_ratio method (0.6 = 60%% of median) [default %default]"),
 
   # --- Multi-seed specific ---
-  make_option(c("--seed-min-windows"), type="integer", default=1,
-              help="Minimum windows for multi-seed Stouffer method (1=single+multi, 2=multi only) [default %default]"),
+  make_option(c("--seed-min-windows"), type = "integer", default = 1,
+              help = "Minimum windows for multi-seed Stouffer method (1=single+multi, 2=multi only) [default %default]"),
 
   # --- Post-filter (consistency check after detection) ---
-  make_option(c("--post-filter"), action="store_true", default=FALSE,
-              help="Enable post-filtering to reduce false positives [default %default]"),
-  make_option(c("--min-median-p"), type="numeric", default=0.01,
-              help="Maximum median p-value of windows in a DMR (post-filter) [default %default]"),
-  make_option(c("--min-consistent-frac"), type="numeric", default=0.5,
-              help="Minimum fraction of windows with p <= p-seed (post-filter) [default %default]"),
+  make_option(c("--post-filter"), action = "store_true", default = FALSE,
+              help = "Enable post-filtering to reduce false positives [default %default]"),
+  make_option(c("--min-median-p"), type = "numeric", default = 0.01,
+              help = "Maximum median p-value of windows in a DMR (post-filter) [default %default]"),
+  make_option(c("--min-consistent-frac"), type = "numeric", default = 0.5,
+              help = "Minimum fraction of windows with p <= p-seed (post-filter) [default %default]"),
 
   # --- Edge / length / median-p filters ---
-  make_option(c("--trim-weak-edges"), action="store_true", default=FALSE,
-              help="Trim weak windows (p > p-extend) from DMR edges [default %default]"),
-  make_option(c("--min-dmr-length"), type="integer", default=0,
-              help="Minimum DMR length in bp (0=no filter) [default %default]"),
-  make_option(c("--max-median-p"), type="numeric", default=1.0,
-              help="Maximum median p-value for final DMRs [default %default]"),
+  make_option(c("--trim-weak-edges"), action = "store_true", default = FALSE,
+              help = "Trim weak windows (p > p-extend) from DMR edges [default %default]"),
+  make_option(c("--min-dmr-length"), type = "integer", default = 0,
+              help = "Minimum DMR length in bp (0=no filter) [default %default]"),
+  make_option(c("--max-median-p"), type = "numeric", default = 1.0,
+              help = "Maximum median p-value for final DMRs [default %default]"),
 
   # --- Overlap merge (post-detection re-merge) ---
-  make_option(c("--merge-overlaps"), action="store_true", default=FALSE,
-              help="Merge overlapping/nearby same-direction DMRs after detection [default %default]"),
-  make_option(c("--merge-overlaps-gap"), type="integer", default=0,
-              help="Max gap (bp) between DMRs to merge [default %default]")
-
+  make_option(c("--merge-overlaps"), action = "store_true", default = FALSE,
+              help = "Merge overlapping/nearby same-direction DMRs after detection [default %default]"),
+  make_option(c("--merge-overlaps-gap"), type = "integer", default = 0,
+              help = "Max gap (bp) between DMRs to merge [default %default]")
 )
 
 opt <- parse_args(OptionParser(option_list = option_list))
-
 if (is.null(opt$windows)) stop("--windows argument is required.")
 
 #========================= Helper Functions ====================================
+safe_rbindlist <- function(lst) {
+  if (length(lst) == 0) return(data.table())
+  data.table::rbindlist(lst)
+}
+
 load_data <- function(path) {
   message("[INFO] Loading data: ", path)
   dt <- fread(path)
   stopifnot(c("chr", "start", "end", "p", "delta") %in% names(dt))
   dt <- dt[order(chr, start)]
   dt[, direction := ifelse(delta >= 0, "hyper", "hypo")]
-  return(dt[is.finite(p) & p > 0 & p <= 1 & is.finite(delta)])
+  dt[is.finite(p) & p > 0 & p <= 1 & is.finite(delta)]
 }
 
-# Write BED file
 write_bed <- function(dmrs, out_path) {
   bed_data <- dmrs[, .(
     chr,
@@ -99,14 +101,6 @@ write_bed <- function(dmrs, out_path) {
   fwrite(bed_data, out_path, sep = "\t", col.names = FALSE)
 }
 
-p_simes <- function(p_values) {
-  p_values <- p_values[is.finite(p_values)]
-  k <- length(p_values)
-  if (k == 0) return(1)
-  p_sorted <- sort(p_values)
-  min(1, min(p_sorted * k / seq_len(k)))
-}
-
 p_stouffer <- function(p_values) {
   p_values <- p_values[is.finite(p_values)]
   k <- length(p_values)
@@ -116,147 +110,110 @@ p_stouffer <- function(p_values) {
   2 * pnorm(-abs(combined_z))
 }
 
-# Calculate delta summary per DMR
 add_delta_summary <- function(dmrs, win) {
   if (nrow(dmrs) == 0) return(dmrs)
-  dmrs_with_delta <- lapply(1:nrow(dmrs), function(i) {
+  rows <- lapply(seq_len(nrow(dmrs)), function(i) {
     row <- dmrs[i, ]
-    overlapping_windows <- win[chr == row$chr &
-                                  start >= row$start &
-                                  end <= row$end]
-    delta_mean <- mean(overlapping_windows$delta, na.rm = TRUE)
-    delta_max <- max(overlapping_windows$delta, na.rm = TRUE)
-    row[, `:=`(delta_mean = delta_mean, delta_max = delta_max)]
-    return(row)
+    overlapping_windows <- win[chr == row$chr & start >= row$start & end <= row$end]
+    row[, `:=`(
+      delta_mean = mean(overlapping_windows$delta, na.rm = TRUE),
+      delta_max = max(overlapping_windows$delta, na.rm = TRUE)
+    )]
+    row
   })
-  return(data.table::rbindlist(dmrs_with_delta))
+  safe_rbindlist(rows)
 }
 
-# Calculate adaptive delta threshold from candidate DMR delta distribution
 calculate_adaptive_delta_threshold <- function(dmrs, win, method = "median_ratio", ratio = 0.6) {
   if (nrow(dmrs) == 0) {
     message("[WARN] No DMRs found for adaptive threshold calculation. Using default min-delta.")
     return(0)
   }
-  
-  # Collect delta values from windows within each DMR
-  all_deltas <- unlist(lapply(1:nrow(dmrs), function(i) {
+
+  all_deltas <- unlist(lapply(seq_len(nrow(dmrs)), function(i) {
     row <- dmrs[i, ]
-    overlapping_windows <- win[chr == row$chr &
-                                  start >= row$start &
-                                  end <= row$end]
+    overlapping_windows <- win[chr == row$chr & start >= row$start & end <= row$end]
     abs(overlapping_windows$delta)
   }))
-  
   all_deltas <- all_deltas[is.finite(all_deltas) & all_deltas > 0]
-  
+
   if (length(all_deltas) == 0) {
     message("[WARN] No valid delta values found. Using default min-delta.")
     return(0)
   }
-  
-  # Compute summary statistics
+
   median_delta <- median(all_deltas, na.rm = TRUE)
-  q25_delta <- quantile(all_deltas, 0.25, na.rm = TRUE)
-  q10_delta <- quantile(all_deltas, 0.10, na.rm = TRUE)
-  mad_delta <- mad(all_deltas, na.rm = TRUE)  # Median Absolute Deviation
-  
-  # Determine threshold by method
+  q25_delta <- as.numeric(quantile(all_deltas, 0.25, na.rm = TRUE))
+  q10_delta <- as.numeric(quantile(all_deltas, 0.10, na.rm = TRUE))
+  mad_delta <- mad(all_deltas, na.rm = TRUE)
+
   threshold <- switch(method,
-    "median_ratio" = median_delta * ratio,     # e.g. 60% of median
-    "q50" = median_delta,                      # median (50th percentile)
-    "q25" = q25_delta,                         # 1st quartile
-    "q10" = q10_delta,                         # 10th percentile
-    "mad" = median_delta - mad_delta,          # median - MAD
-    median_delta * ratio                       # default
+    "median_ratio" = median_delta * ratio,
+    "q50" = median_delta,
+    "q25" = q25_delta,
+    "q10" = q10_delta,
+    "mad" = median_delta - mad_delta,
+    median_delta * ratio
   )
-  
+
   message(sprintf("[INFO] Adaptive delta threshold: %.4f (method=%s, median=%.4f, Q25=%.4f, Q10=%.4f)",
                   threshold, method, median_delta, q25_delta, q10_delta))
-  
-  return(max(0, threshold))  # Prevent negative threshold
+  max(0, threshold)
 }
 
-# Optimize DMR boundaries: remove weak windows from both edges
 trim_dmr_edges <- function(dmrs, win, p_extend) {
   if (nrow(dmrs) == 0) return(dmrs)
-  
   message("[INFO] Trimming weak edges (p > ", p_extend, ")")
-  
-  trimmed <- lapply(1:nrow(dmrs), function(i) {
+
+  trimmed <- lapply(seq_len(nrow(dmrs)), function(i) {
     row <- dmrs[i, ]
-    # Get overlapping windows
-    overlapping_windows <- win[chr == row$chr &
-                                direction == row$direction &
-                                start >= row$start &
-                                end <= row$end]
-    overlapping_windows <- overlapping_windows[order(start)]
-    
+    overlapping_windows <- win[chr == row$chr & direction == row$direction &
+                                 start >= row$start & end <= row$end][order(start)]
     if (nrow(overlapping_windows) == 0) return(NULL)
-    
-    # Trim weak windows from the forward edge
+
     start_idx <- 1
-    while (start_idx <= nrow(overlapping_windows) && 
-           overlapping_windows$p[start_idx] > p_extend) {
+    while (start_idx <= nrow(overlapping_windows) && overlapping_windows$p[start_idx] > p_extend) {
       start_idx <- start_idx + 1
     }
-    
-    # Trim weak windows from the backward edge
+
     end_idx <- nrow(overlapping_windows)
-    while (end_idx >= start_idx && 
-           overlapping_windows$p[end_idx] > p_extend) {
+    while (end_idx >= start_idx && overlapping_windows$p[end_idx] > p_extend) {
       end_idx <- end_idx - 1
     }
-    
-    # Check if any valid windows remain
+
     if (start_idx > end_idx) return(NULL)
-    
-    trimmed_windows <- overlapping_windows[start_idx:end_idx]
-    
-    # Set new boundaries
-    row$start <- min(trimmed_windows$start)
-    row$end <- max(trimmed_windows$end)
-    row$n_windows <- nrow(trimmed_windows)
-    
-    return(row)
+    kept <- overlapping_windows[start_idx:end_idx]
+    row$start <- min(kept$start)
+    row$end <- max(kept$end)
+    row$n_windows <- nrow(kept)
+    row
   })
-  
-  trimmed <- data.table::rbindlist(trimmed[!sapply(trimmed, is.null)])
-  message("[INFO] Trimmed: ", nrow(dmrs), " -> ", nrow(trimmed), " DMRs")
-  return(trimmed)
+
+  out <- safe_rbindlist(trimmed[!sapply(trimmed, is.null)])
+  message("[INFO] Trimmed: ", nrow(dmrs), " -> ", nrow(out), " DMRs")
+  out
 }
 
-# Post-filtering: quality check to reduce false positives
 post_filter_dmrs <- function(dmrs, win, min_median_p, min_consistent_frac, p_seed) {
   if (nrow(dmrs) == 0) return(dmrs)
-  
-  message("[INFO] Applying post-filter: median_p <= ", min_median_p, 
+
+  message("[INFO] Applying post-filter: median_p <= ", min_median_p,
           ", consistent_frac >= ", min_consistent_frac)
-  
-  keep <- sapply(1:nrow(dmrs), function(i) {
+
+  keep <- sapply(seq_len(nrow(dmrs)), function(i) {
     row <- dmrs[i, ]
-    # Get overlapping windows
-    overlapping_windows <- win[chr == row$chr &
-                                direction == row$direction &
-                                start >= row$start &
-                                end <= row$end]
-    
+    overlapping_windows <- win[chr == row$chr & direction == row$direction &
+                                 start >= row$start & end <= row$end]
     if (nrow(overlapping_windows) == 0) return(FALSE)
-    
-    # Quality check 1: median p-value
+
     median_p <- median(overlapping_windows$p, na.rm = TRUE)
-    
-    # Quality check 2: fraction of windows with p < p_seed
     consistent_frac <- mean(overlapping_windows$p <= p_seed, na.rm = TRUE)
-    
-    # Check if both conditions are met
     median_p <= min_median_p && consistent_frac >= min_consistent_frac
   })
-  
+
   filtered <- dmrs[keep, ]
-  message("[INFO] Post-filter: ", nrow(dmrs), " -> ", nrow(filtered), 
+  message("[INFO] Post-filter: ", nrow(dmrs), " -> ", nrow(filtered),
           " DMRs (removed ", nrow(dmrs) - nrow(filtered), ")")
-  
   filtered
 }
 
@@ -265,393 +222,115 @@ merge_overlapping_dmrs <- function(dmrs, win, max_gap_bp = 0, p_seed = 0.05) {
 
   dmrs <- dmrs[order(chr, start, end)]
   merged <- list()
-  i <- 1
+  i <- 1L
+
   while (i <= nrow(dmrs)) {
     current <- dmrs[i, ]
-    j <- i + 1
-    while (j <= nrow(dmrs) &&
-           dmrs$chr[j] == current$chr &&
-           dmrs$direction[j] == current$direction) {
+    j <- i + 1L
+    while (j <= nrow(dmrs) && dmrs$chr[j] == current$chr && dmrs$direction[j] == current$direction) {
       gap <- dmrs$start[j] - current$end
       if (gap <= max_gap_bp) {
         current$end <- max(current$end, dmrs$end[j])
-        j <- j + 1
+        j <- j + 1L
       } else {
         break
       }
     }
 
-    merged_windows <- win[chr == current$chr &
-                           direction == current$direction &
-                           start >= current$start &
-                           end <= current$end]
-    n_windows <- nrow(merged_windows)
-    if (n_windows == 0) {
+    merged_windows <- win[chr == current$chr & direction == current$direction &
+                           start >= current$start & end <= current$end]
+    if (nrow(merged_windows) == 0) {
       i <- j
       next
     }
 
-    combined_p <- p_stouffer(merged_windows$p)
     out_row <- data.table(
       chr = current$chr,
       start = current$start,
       end = current$end,
-      n_windows = n_windows,
+      n_windows = nrow(merged_windows),
       direction = current$direction,
-      combined_p = combined_p
+      combined_p = p_stouffer(merged_windows$p)
     )
-
     if ("strong_frac" %in% names(dmrs)) {
       out_row[, strong_frac := mean(merged_windows$p <= p_seed, na.rm = TRUE)]
     }
 
-    merged[[length(merged) + 1]] <- out_row
+    merged[[length(merged) + 1L]] <- out_row
     i <- j
   }
 
-  data.table::rbindlist(merged)
+  safe_rbindlist(merged)
 }
 
-# Detect DMRs using Single Seed method (bidirectional extension from single window seed using Stouffer method)
-detect_dmrs_single_seed <- function(win, p_seed, p_extend, max_gap_bp, min_windows, min_delta = 0, 
+#========================= DMR Detection =======================================
+detect_dmrs_single_seed <- function(win, p_seed, p_extend, max_gap_bp, min_windows, min_delta = 0,
                                     max_p_degradation = 1.2, max_final_p = 1.0, min_strong_windows = 0.5) {
   res <- list()
   i <- 1L
   n <- nrow(win)
-  
+
   while (i <= n) {
-    # Single window is a seed if p <= p_seed
     if (win$p[i] > p_seed) {
-      i <- i + 1
+      i <- i + 1L
       next
     }
-    
+
     chr <- win$chr[i]
     direction <- win$direction[i]
     run_idx <- i
-    
-    # Initial Stouffer p-value (single seed)
     current_stouffer_p <- win$p[i]
-    
-    # Forward extension with Stouffer (p-value degradation check + effect size filter)
-    j <- i + 1
-    while (j <= n && win$chr[j] == chr && win$direction[j] == direction) {
-      gap <- win$start[j] - win$end[max(run_idx)]
-      if (gap > max_gap_bp) break
-      
-      # Effect size filter (skip small delta if set)
-      if (min_delta > 0 && abs(win$delta[j]) < min_delta) {
-        j <- j + 1
-        next
-      }
-      
-      test_idx <- c(run_idx, j)
-      z_scores <- qnorm(1 - win$p[test_idx])
-      combined_z <- sum(z_scores) / sqrt(length(z_scores))
-      stouffer_p <- 2 * pnorm(-abs(combined_z))
-      
-      # P-value degradation check: use stricter threshold
-      if (stouffer_p <= p_extend && stouffer_p <= current_stouffer_p * max_p_degradation) {
-        run_idx <- test_idx
-        current_stouffer_p <- stouffer_p  # Update p-value
-        j <- j + 1
-      } else {
-        break
-      }
-    }
-    
-    # Backward extension with Stouffer (p-value degradation check + effect size filter)
-    k <- i - 1
-    while (k >= 1 && win$chr[k] == chr && win$direction[k] == direction) {
-      gap <- win$start[min(run_idx)] - win$end[k]
-      if (gap > max_gap_bp) break
-      
-      # Effect size filter
-      if (min_delta > 0 && abs(win$delta[k]) < min_delta) {
-        k <- k - 1
-        next
-      }
-      
-      test_idx <- c(k, run_idx)
-      z_scores <- qnorm(1 - win$p[test_idx])
-      combined_z <- sum(z_scores) / sqrt(length(z_scores))
-      stouffer_p <- 2 * pnorm(-abs(combined_z))
-      
-      # P-value degradation check: use stricter threshold
-      if (stouffer_p <= p_extend && stouffer_p <= current_stouffer_p * max_p_degradation) {
-        run_idx <- test_idx
-        current_stouffer_p <- stouffer_p
-        k <- k - 1
-      } else {
-        break
-      }
-    }
-    
-    # Compute final combined p-value
-    z_scores_final <- qnorm(1 - win$p[run_idx])
-    combined_z_final <- sum(z_scores_final) / sqrt(length(z_scores_final))
-    final_stouffer_p <- 2 * pnorm(-abs(combined_z_final))
-    
-    # Quality check: fraction of windows with strong signal
-    strong_windows_frac <- sum(win$p[run_idx] <= p_seed) / length(run_idx)
-    
-    # Add DMR (apply filtering conditions)
-    if (length(run_idx) >= min_windows && 
-        final_stouffer_p <= max_final_p && 
-        strong_windows_frac >= min_strong_windows) {
-      res[[length(res) + 1]] <- list(
-        chr = chr,
-        start = min(win$start[run_idx]),
-        end = max(win$end[run_idx]),
-        n_windows = length(run_idx),
-        direction = direction,
-        combined_p = final_stouffer_p,
-        strong_frac = strong_windows_frac
-      )
-    }
-    
-    i <- max(run_idx) + 1
-  }
-  
-  return(data.table::rbindlist(res))
-}
 
-# Multi-seed Stouffer method: create Stouffer seed from multiple windows (improved truth DMR detection)
-detect_dmrs_stouffer_multi_seed <- function(win, p_seed, p_extend, max_gap_bp, min_windows, min_delta = 0, 
-                                             max_p_degradation = 1.2, max_final_p = 1.0, min_strong_windows = 0.5, 
-                                             seed_min_windows = 2) {
-  res <- list()
-  i <- 1L
-  n <- nrow(win)
-  
-  while (i <= n) {
-    chr <- win$chr[i]
-    direction <- win$direction[i]
-    
-    # Create Stouffer seed from multiple windows
-    seed_idx <- i
-    j <- i + 1
-    while (j <= n && win$chr[j] == chr && win$direction[j] == direction) {
-      gap <- win$start[j] - win$end[j - 1]
-      if (gap > max_gap_bp) break
-      seed_idx <- c(seed_idx, j)
-      j <- j + 1
-      
-      # Apply Stouffer test when seed reaches sufficient size
-      if (length(seed_idx) >= seed_min_windows) {
-        z_scores <- qnorm(1 - win$p[seed_idx])
-        combined_z <- sum(z_scores) / sqrt(length(z_scores))
-        stouffer_seed_p <- 2 * pnorm(-abs(combined_z))
-        
-        if (stouffer_seed_p <= p_seed) {
-          # Adopt as valid seed
-          break
-        }
-      }
-    }
-    
-    # If seed does not meet conditions, move to next
-    if (length(seed_idx) < seed_min_windows) {
-      i <- max(seed_idx) + 1
-      next
-    }
-    
-    z_scores_seed <- qnorm(1 - win$p[seed_idx])
-    combined_z_seed <- sum(z_scores_seed) / sqrt(length(z_scores_seed))
-    stouffer_seed_p <- 2 * pnorm(-abs(combined_z_seed))
-    
-    if (stouffer_seed_p > p_seed) {
-      i <- max(seed_idx) + 1
-      next
-    }
-    
-    # Forward and backward extension from seed
-    run_idx <- seed_idx
-    current_stouffer_p <- stouffer_seed_p
-    
-    # Forward extension
-    j <- max(run_idx) + 1
+    j <- i + 1L
     while (j <= n && win$chr[j] == chr && win$direction[j] == direction) {
       gap <- win$start[j] - win$end[max(run_idx)]
       if (gap > max_gap_bp) break
-      
       if (min_delta > 0 && abs(win$delta[j]) < min_delta) {
-        j <- j + 1
+        j <- j + 1L
         next
       }
-      
-      test_idx <- c(run_idx, j)
-      z_scores <- qnorm(1 - win$p[test_idx])
-      combined_z <- sum(z_scores) / sqrt(length(z_scores))
-      stouffer_p <- 2 * pnorm(-abs(combined_z))
-      
-      if (stouffer_p <= p_extend && stouffer_p <= current_stouffer_p * max_p_degradation) {
-        run_idx <- test_idx
-        current_stouffer_p <- stouffer_p
-        j <- j + 1
-      } else {
-        break
-      }
-    }
-    
-    # Backward extension
-    k <- min(seed_idx) - 1
-    while (k >= 1 && win$chr[k] == chr && win$direction[k] == direction) {
-      gap <- win$start[min(run_idx)] - win$end[k]
-      if (gap > max_gap_bp) break
-      
-      if (min_delta > 0 && abs(win$delta[k]) < min_delta) {
-        k <- k - 1
-        next
-      }
-      
-      test_idx <- c(k, run_idx)
-      z_scores <- qnorm(1 - win$p[test_idx])
-      combined_z <- sum(z_scores) / sqrt(length(z_scores))
-      stouffer_p <- 2 * pnorm(-abs(combined_z))
-      
-      if (stouffer_p <= p_extend && stouffer_p <= current_stouffer_p * max_p_degradation) {
-        run_idx <- test_idx
-        current_stouffer_p <- stouffer_p
-        k <- k - 1
-      } else {
-        break
-      }
-    }
-    
-    # Final combined p-value
-    z_scores_final <- qnorm(1 - win$p[run_idx])
-    combined_z_final <- sum(z_scores_final) / sqrt(length(z_scores_final))
-    final_stouffer_p <- 2 * pnorm(-abs(combined_z_final))
-    
-    # Quality check
-    strong_windows_frac <- sum(win$p[run_idx] <= p_seed) / length(run_idx)
-    
-    if (length(run_idx) >= min_windows && 
-        final_stouffer_p <= max_final_p && 
-        strong_windows_frac >= min_strong_windows) {
-      res[[length(res) + 1]] <- list(
-        chr = chr,
-        start = min(win$start[run_idx]),
-        end = max(win$end[run_idx]),
-        n_windows = length(run_idx),
-        direction = direction,
-        combined_p = final_stouffer_p,
-        strong_frac = strong_windows_frac
-      )
-    }
-    
-    i <- max(run_idx) + 1
-  }
-  
-  return(data.table::rbindlist(res))
-}
 
-detect_dmrs_combined <- function(win, p_seed, p_extend, max_gap_bp, min_windows, min_delta = 0,
-                                  max_p_degradation = 1.2, max_final_p = 1.0, min_strong_windows = 0.5) {
-  res <- list()
-  i <- 1L
-  n <- nrow(win)
-  
-  while (i <= n) {
-    if (win$p[i] > p_seed) {
-      i <- i + 1
-      next
-    }
-    chr <- win$chr[i]
-    direction <- win$direction[i]
-    
-    # Detect seed (starting point) using Simes method
-    seed_idx <- i
-    j <- i + 1
-    while (j <= n && win$chr[j] == chr && win$direction[j] == direction) {
-      gap <- win$start[j] - win$end[j - 1]
-      if (gap > max_gap_bp) break
-      seed_idx <- c(seed_idx, j)
-      j <- j + 1
-    }
-    
-    # Judge if seed is appropriate as starting point based on Simes combined p-value
-    simes_seed_p <- p_simes(win$p[seed_idx])
-    if (simes_seed_p > p_seed || length(seed_idx) < min_windows) {
-      i <- max(seed_idx) + 1
-      next
-    }
-    
-    # Compute initial Stouffer p-value
-    z_scores_init <- qnorm(1 - win$p[seed_idx])
-    combined_z_init <- sum(z_scores_init) / sqrt(length(z_scores_init))
-    current_stouffer_p <- 2 * pnorm(-abs(combined_z_init))
-    
-    # Forward extension with Stouffer (p-value degradation check + effect size filter)
-    run_idx <- seed_idx
-    j <- max(run_idx) + 1
-    while (j <= n && win$chr[j] == chr && win$direction[j] == direction) {
-      gap <- win$start[j] - win$end[max(run_idx)]
-      if (gap > max_gap_bp) break
-      
-      # Effect size filter (skip small delta if set)
-      if (min_delta > 0 && abs(win$delta[j]) < min_delta) {
-        j <- j + 1
-        next
-      }
-      
       test_idx <- c(run_idx, j)
       z_scores <- qnorm(1 - win$p[test_idx])
-      combined_z <- sum(z_scores) / sqrt(length(z_scores))
-      stouffer_p <- 2 * pnorm(-abs(combined_z))
-      
-      # P-value degradation check: stop extension if new p-value is worse (larger) than current
-      if (stouffer_p <= p_extend && stouffer_p <= current_stouffer_p * max_p_degradation) {
-        run_idx <- test_idx
-        current_stouffer_p <- stouffer_p  # Update p-value
-        j <- j + 1
-      } else {
-        break
-      }
-    }
-    
-    # Backward extension with Stouffer (p-value degradation check + effect size filter)
-    k <- min(seed_idx) - 1
-    while (k >= 1 && win$chr[k] == chr && win$direction[k] == direction) {
-      gap <- win$start[min(run_idx)] - win$end[k]
-      if (gap > max_gap_bp) break
-      
-      # Effect size filter
-      if (min_delta > 0 && abs(win$delta[k]) < min_delta) {
-        k <- k - 1
-        next
-      }
-      
-      test_idx <- c(k, run_idx)
-      z_scores <- qnorm(1 - win$p[test_idx])
-      combined_z <- sum(z_scores) / sqrt(length(z_scores))
-      stouffer_p <- 2 * pnorm(-abs(combined_z))
-      
-      # P-value degradation check
+      stouffer_p <- 2 * pnorm(-abs(sum(z_scores) / sqrt(length(z_scores))))
       if (stouffer_p <= p_extend && stouffer_p <= current_stouffer_p * max_p_degradation) {
         run_idx <- test_idx
         current_stouffer_p <- stouffer_p
-        k <- k - 1
+        j <- j + 1L
       } else {
         break
       }
     }
-    
-    # Compute final combined p-value
-    final_simes_p <- p_simes(win$p[run_idx])
+
+    k <- i - 1L
+    while (k >= 1 && win$chr[k] == chr && win$direction[k] == direction) {
+      gap <- win$start[min(run_idx)] - win$end[k]
+      if (gap > max_gap_bp) break
+      if (min_delta > 0 && abs(win$delta[k]) < min_delta) {
+        k <- k - 1L
+        next
+      }
+
+      test_idx <- c(k, run_idx)
+      z_scores <- qnorm(1 - win$p[test_idx])
+      stouffer_p <- 2 * pnorm(-abs(sum(z_scores) / sqrt(length(z_scores))))
+      if (stouffer_p <= p_extend && stouffer_p <= current_stouffer_p * max_p_degradation) {
+        run_idx <- test_idx
+        current_stouffer_p <- stouffer_p
+        k <- k - 1L
+      } else {
+        break
+      }
+    }
+
     z_scores_final <- qnorm(1 - win$p[run_idx])
-    combined_z_final <- sum(z_scores_final) / sqrt(length(z_scores_final))
-    final_stouffer_p <- 2 * pnorm(-abs(combined_z_final))
-    
-    # Quality check: fraction of windows with strong signal
+    final_stouffer_p <- 2 * pnorm(-abs(sum(z_scores_final) / sqrt(length(z_scores_final))))
     strong_windows_frac <- sum(win$p[run_idx] <= p_seed) / length(run_idx)
-    
-    # Add DMR (apply filtering conditions)
+
     if (length(run_idx) >= min_windows &&
         final_stouffer_p <= max_final_p &&
         strong_windows_frac >= min_strong_windows) {
-      res[[length(res) + 1]] <- list(
+      res[[length(res) + 1L]] <- list(
         chr = chr,
         start = min(win$start[run_idx]),
         end = max(win$end[run_idx]),
@@ -661,14 +340,175 @@ detect_dmrs_combined <- function(win, p_seed, p_extend, max_gap_bp, min_windows,
         strong_frac = strong_windows_frac
       )
     }
-    
-    i <- max(run_idx) + 1
+
+    i <- max(run_idx) + 1L
   }
-  
-  return(data.table::rbindlist(res))
+
+  safe_rbindlist(res)
 }
 
-#========================= Main Script ==========================================
+detect_dmrs_stouffer_multi_seed <- function(win, p_seed, p_extend, max_gap_bp, min_windows, min_delta = 0,
+                                            max_p_degradation = 1.2, max_final_p = 1.0, min_strong_windows = 0.5,
+                                            seed_min_windows = 2) {
+  res <- list()
+  i <- 1L
+  n <- nrow(win)
+
+  while (i <= n) {
+    chr <- win$chr[i]
+    direction <- win$direction[i]
+
+    seed_idx <- i
+    j <- i + 1L
+    while (j <= n && win$chr[j] == chr && win$direction[j] == direction) {
+      gap <- win$start[j] - win$end[j - 1L]
+      if (gap > max_gap_bp) break
+      seed_idx <- c(seed_idx, j)
+      j <- j + 1L
+
+      if (length(seed_idx) >= seed_min_windows) {
+        z_scores <- qnorm(1 - win$p[seed_idx])
+        stouffer_seed_p <- 2 * pnorm(-abs(sum(z_scores) / sqrt(length(z_scores))))
+        if (stouffer_seed_p <= p_seed) break
+      }
+    }
+
+    if (length(seed_idx) < seed_min_windows) {
+      i <- max(seed_idx) + 1L
+      next
+    }
+
+    z_scores_seed <- qnorm(1 - win$p[seed_idx])
+    stouffer_seed_p <- 2 * pnorm(-abs(sum(z_scores_seed) / sqrt(length(z_scores_seed))))
+    if (stouffer_seed_p > p_seed) {
+      i <- max(seed_idx) + 1L
+      next
+    }
+
+    run_idx <- seed_idx
+    current_stouffer_p <- stouffer_seed_p
+
+    j <- max(run_idx) + 1L
+    while (j <= n && win$chr[j] == chr && win$direction[j] == direction) {
+      gap <- win$start[j] - win$end[max(run_idx)]
+      if (gap > max_gap_bp) break
+      if (min_delta > 0 && abs(win$delta[j]) < min_delta) {
+        j <- j + 1L
+        next
+      }
+
+      test_idx <- c(run_idx, j)
+      z_scores <- qnorm(1 - win$p[test_idx])
+      stouffer_p <- 2 * pnorm(-abs(sum(z_scores) / sqrt(length(z_scores))))
+      if (stouffer_p <= p_extend && stouffer_p <= current_stouffer_p * max_p_degradation) {
+        run_idx <- test_idx
+        current_stouffer_p <- stouffer_p
+        j <- j + 1L
+      } else {
+        break
+      }
+    }
+
+    k <- min(seed_idx) - 1L
+    while (k >= 1 && win$chr[k] == chr && win$direction[k] == direction) {
+      gap <- win$start[min(run_idx)] - win$end[k]
+      if (gap > max_gap_bp) break
+      if (min_delta > 0 && abs(win$delta[k]) < min_delta) {
+        k <- k - 1L
+        next
+      }
+
+      test_idx <- c(k, run_idx)
+      z_scores <- qnorm(1 - win$p[test_idx])
+      stouffer_p <- 2 * pnorm(-abs(sum(z_scores) / sqrt(length(z_scores))))
+      if (stouffer_p <= p_extend && stouffer_p <= current_stouffer_p * max_p_degradation) {
+        run_idx <- test_idx
+        current_stouffer_p <- stouffer_p
+        k <- k - 1L
+      } else {
+        break
+      }
+    }
+
+    z_scores_final <- qnorm(1 - win$p[run_idx])
+    final_stouffer_p <- 2 * pnorm(-abs(sum(z_scores_final) / sqrt(length(z_scores_final))))
+    strong_windows_frac <- sum(win$p[run_idx] <= p_seed) / length(run_idx)
+
+    if (length(run_idx) >= min_windows &&
+        final_stouffer_p <= max_final_p &&
+        strong_windows_frac >= min_strong_windows) {
+      res[[length(res) + 1L]] <- list(
+        chr = chr,
+        start = min(win$start[run_idx]),
+        end = max(win$end[run_idx]),
+        n_windows = length(run_idx),
+        direction = direction,
+        combined_p = final_stouffer_p,
+        strong_frac = strong_windows_frac
+      )
+    }
+
+    i <- max(run_idx) + 1L
+  }
+
+  safe_rbindlist(res)
+}
+
+detect_dmrs_hybrid_seed <- function(win, p_seed, p_extend, max_gap_bp, min_windows, min_delta = 0,
+                                    max_p_degradation = 1.2, max_final_p = 1.0, min_strong_windows = 0.5,
+                                    seed_min_windows = 2) {
+  message("[INFO] Hybrid seed detection: multi_seed (primary) + single_seed (complementary)")
+
+  dmrs_multi <- detect_dmrs_stouffer_multi_seed(win, p_seed, p_extend, max_gap_bp, min_windows,
+                                                 min_delta, max_p_degradation, max_final_p,
+                                                 min_strong_windows, seed_min_windows)
+  if (nrow(dmrs_multi) > 0) {
+    dmrs_multi[, detection_method := "multi_seed"]
+  } else {
+    dmrs_multi <- data.table(chr = character(), start = integer(), end = integer(),
+                             n_windows = integer(), direction = character(),
+                             combined_p = numeric(), strong_frac = numeric(),
+                             detection_method = character())
+  }
+
+  covered_idx <- integer(0)
+  if (nrow(dmrs_multi) > 0) {
+    for (i in seq_len(nrow(dmrs_multi))) {
+      dmr <- dmrs_multi[i, ]
+      overlapping <- which(win$chr == dmr$chr &
+                           win$direction == dmr$direction &
+                           win$start >= dmr$start &
+                           win$end <= dmr$end)
+      covered_idx <- c(covered_idx, overlapping)
+    }
+    covered_idx <- unique(covered_idx)
+  }
+
+  remaining_win <- win[!seq_len(nrow(win)) %in% covered_idx]
+  if (nrow(remaining_win) > 0) {
+    dmrs_single <- detect_dmrs_single_seed(remaining_win, p_seed, p_extend, max_gap_bp, min_windows,
+                                           min_delta, max_p_degradation, max_final_p, min_strong_windows)
+    if (nrow(dmrs_single) > 0) {
+      dmrs_single[, detection_method := "single_seed"]
+    } else {
+      dmrs_single <- data.table(chr = character(), start = integer(), end = integer(),
+                                n_windows = integer(), direction = character(),
+                                combined_p = numeric(), strong_frac = numeric(),
+                                detection_method = character())
+    }
+  } else {
+    dmrs_single <- data.table(chr = character(), start = integer(), end = integer(),
+                              n_windows = integer(), direction = character(),
+                              combined_p = numeric(), strong_frac = numeric(),
+                              detection_method = character())
+  }
+
+  dmrs_hybrid <- rbind(dmrs_multi, dmrs_single)
+  if (nrow(dmrs_hybrid) > 0) dmrs_hybrid <- dmrs_hybrid[order(chr, start)]
+  dmrs_hybrid
+}
+
+#========================= Main Script =========================================
 win <- load_data(opt$windows)
 
 valid_modes <- c("single_seed", "multi_seed", "hybrid_seed")
@@ -678,158 +518,112 @@ if (!opt$`merge-mode` %in% valid_modes) {
 }
 
 if (opt$`merge-mode` == "multi_seed") {
-  # When using adaptive delta threshold: first detect DMRs with loose conditions
   if (opt$`adaptive-delta`) {
     message("[INFO] Using adaptive delta threshold...")
-    # Stage 1: detect candidate DMRs with min-delta=0
-    dmrs_initial <- detect_dmrs_stouffer_multi_seed(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`, 
+    dmrs_initial <- detect_dmrs_stouffer_multi_seed(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`,
                                                      min_delta = 0, opt$`max-p-degradation`, opt$`max-final-p`, opt$`min-strong-windows`,
                                                      seed_min_windows = opt$`seed-min-windows`)
-    
-    # Stage 2: compute adaptive threshold from delta distribution of candidate DMRs
-    adaptive_min_delta <- calculate_adaptive_delta_threshold(dmrs_initial, win, 
-                                                              method = opt$`adaptive-delta-method`, 
-                                                              ratio = opt$`adaptive-delta-ratio`)
-    
-    # Stage 3: re-detect with adaptive threshold
-    dmrs_stouffer_ms <- detect_dmrs_stouffer_multi_seed(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`, 
-                                                         adaptive_min_delta, opt$`max-p-degradation`, opt$`max-final-p`, opt$`min-strong-windows`,
-                                                         seed_min_windows = opt$`seed-min-windows`)
-  } else {
-    dmrs_stouffer_ms <- detect_dmrs_stouffer_multi_seed(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`, 
-                                                         opt$`min-delta`, opt$`max-p-degradation`, opt$`max-final-p`, opt$`min-strong-windows`,
-                                                         seed_min_windows = opt$`seed-min-windows`)
-  }
-  
-  if (opt$`trim-weak-edges`) {
-    dmrs_stouffer_ms <- trim_dmr_edges(dmrs_stouffer_ms, win, opt$`p-extend`)
-  }
-  
-  if (opt$`min-dmr-length` > 0) {
-    before_n <- nrow(dmrs_stouffer_ms)
-    dmrs_stouffer_ms <- dmrs_stouffer_ms[end - start >= opt$`min-dmr-length`, ]
-    message("[INFO] DMR length filter: ", before_n, " -> ", nrow(dmrs_stouffer_ms))
-  }
-  
-  if (opt$`max-median-p` < 1.0 && nrow(dmrs_stouffer_ms) > 0) {
-    before_n <- nrow(dmrs_stouffer_ms)
-    dmrs_stouffer_ms <- lapply(1:nrow(dmrs_stouffer_ms), function(i) {
-      row <- dmrs_stouffer_ms[i, ]
-      overlapping_windows <- win[chr == row$chr & direction == row$direction &
-                                   start >= row$start & end <= row$end]
-      median_p <- median(overlapping_windows$p, na.rm = TRUE)
-      if (median_p <= opt$`max-median-p`) return(row) else return(NULL)
-    })
-    dmrs_stouffer_ms <- data.table::rbindlist(dmrs_stouffer_ms[!sapply(dmrs_stouffer_ms, is.null)])
-    message("[INFO] Median p-value filter: ", before_n, " -> ", nrow(dmrs_stouffer_ms))
-  }
-  
-  if (opt$`post-filter`) {
-    dmrs_stouffer_ms <- post_filter_dmrs(dmrs_stouffer_ms, win, opt$`min-median-p`, 
-                                         opt$`min-consistent-frac`, opt$`p-seed`)
-  }
-  if (opt$`merge-overlaps`) {
-    dmrs_stouffer_ms <- merge_overlapping_dmrs(
-      dmrs_stouffer_ms,
-      win,
-      max_gap_bp = opt$`merge-overlaps-gap`,
-      p_seed = opt$`p-seed`
-    )
-  }
-  dmrs_multi_seed <- add_delta_summary(dmrs_stouffer_ms, win)
-  fwrite(dmrs_multi_seed, sprintf("%s_dmrs_multi_seed.tsv", opt$`out-prefix`), sep = "\t")
-  write_bed(dmrs_multi_seed, sprintf("%s_dmrs_multi_seed.bed", opt$`out-prefix`))
-} else if (opt$`merge-mode` == "hybrid_seed") {
-  if (opt$`adaptive-delta`) {
-    message("[INFO] Using adaptive delta threshold...")
-    # Stage 1: detect candidate DMRs with min-delta=0
-    dmrs_initial <- detect_dmrs_combined(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`,
-                                          min_delta = 0, opt$`max-p-degradation`, opt$`max-final-p`, opt$`min-strong-windows`)
-    # Stage 2: compute adaptive threshold from delta distribution of candidate DMRs
     adaptive_min_delta <- calculate_adaptive_delta_threshold(dmrs_initial, win,
                                                               method = opt$`adaptive-delta-method`,
                                                               ratio = opt$`adaptive-delta-ratio`)
-    # Stage 3: re-detect with adaptive threshold
-    dmrs_hybrid_seed <- detect_dmrs_combined(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`,
-                                              adaptive_min_delta, opt$`max-p-degradation`, opt$`max-final-p`, opt$`min-strong-windows`)
+    dmrs <- detect_dmrs_stouffer_multi_seed(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`,
+                                            adaptive_min_delta, opt$`max-p-degradation`, opt$`max-final-p`, opt$`min-strong-windows`,
+                                            seed_min_windows = opt$`seed-min-windows`)
   } else {
-    dmrs_hybrid_seed <- detect_dmrs_combined(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`,
-                                              opt$`min-delta`, opt$`max-p-degradation`, opt$`max-final-p`, opt$`min-strong-windows`)
+    dmrs <- detect_dmrs_stouffer_multi_seed(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`,
+                                            opt$`min-delta`, opt$`max-p-degradation`, opt$`max-final-p`, opt$`min-strong-windows`,
+                                            seed_min_windows = opt$`seed-min-windows`)
   }
-  if (opt$`post-filter`) {
-    dmrs_hybrid_seed <- post_filter_dmrs(dmrs_hybrid_seed, win, opt$`min-median-p`,
-                                         opt$`min-consistent-frac`, opt$`p-seed`)
+
+  if (opt$`trim-weak-edges`) dmrs <- trim_dmr_edges(dmrs, win, opt$`p-extend`)
+  if (opt$`min-dmr-length` > 0) dmrs <- dmrs[end - start >= opt$`min-dmr-length`, ]
+
+  if (opt$`max-median-p` < 1.0 && nrow(dmrs) > 0) {
+    dmrs <- safe_rbindlist(lapply(seq_len(nrow(dmrs)), function(i) {
+      row <- dmrs[i, ]
+      overlapping_windows <- win[chr == row$chr & direction == row$direction &
+                                   start >= row$start & end <= row$end]
+      if (median(overlapping_windows$p, na.rm = TRUE) <= opt$`max-median-p`) row else NULL
+    }))
   }
-  if (opt$`merge-overlaps`) {
-    dmrs_hybrid_seed <- merge_overlapping_dmrs(
-      dmrs_hybrid_seed,
-      win,
-      max_gap_bp = opt$`merge-overlaps-gap`,
-      p_seed = opt$`p-seed`
-    )
+
+  if (opt$`post-filter`) dmrs <- post_filter_dmrs(dmrs, win, opt$`min-median-p`, opt$`min-consistent-frac`, opt$`p-seed`)
+  if (opt$`merge-overlaps`) dmrs <- merge_overlapping_dmrs(dmrs, win, max_gap_bp = opt$`merge-overlaps-gap`, p_seed = opt$`p-seed`)
+
+  dmrs <- add_delta_summary(dmrs, win)
+  fwrite(dmrs, sprintf("%s_dmrs_multi_seed.tsv", opt$`out-prefix`), sep = "\t")
+  write_bed(dmrs, sprintf("%s_dmrs_multi_seed.bed", opt$`out-prefix`))
+
+} else if (opt$`merge-mode` == "hybrid_seed") {
+  if (opt$`adaptive-delta`) {
+    message("[INFO] Hybrid seed with adaptive delta threshold...")
+    dmrs_initial <- detect_dmrs_stouffer_multi_seed(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`,
+                                                     min_delta = 0, opt$`max-p-degradation`, opt$`max-final-p`, opt$`min-strong-windows`,
+                                                     seed_min_windows = opt$`seed-min-windows`)
+    adaptive_min_delta <- calculate_adaptive_delta_threshold(dmrs_initial, win,
+                                                              method = opt$`adaptive-delta-method`,
+                                                              ratio = opt$`adaptive-delta-ratio`)
+    dmrs <- detect_dmrs_hybrid_seed(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`,
+                                    adaptive_min_delta, opt$`max-p-degradation`, opt$`max-final-p`, opt$`min-strong-windows`,
+                                    seed_min_windows = opt$`seed-min-windows`)
+  } else {
+    dmrs <- detect_dmrs_hybrid_seed(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`,
+                                    opt$`min-delta`, opt$`max-p-degradation`, opt$`max-final-p`, opt$`min-strong-windows`,
+                                    seed_min_windows = opt$`seed-min-windows`)
   }
-  dmrs_hybrid_seed <- add_delta_summary(dmrs_hybrid_seed, win)  # Add delta values
-  fwrite(dmrs_hybrid_seed, sprintf("%s_dmrs_hybrid_seed.tsv", opt$`out-prefix`), sep = "\t")
-  write_bed(dmrs_hybrid_seed, sprintf("%s_dmrs_hybrid_seed.bed", opt$`out-prefix`))  # BED output
+
+  if (opt$`trim-weak-edges`) dmrs <- trim_dmr_edges(dmrs, win, opt$`p-extend`)
+  if (opt$`min-dmr-length` > 0) dmrs <- dmrs[end - start >= opt$`min-dmr-length`, ]
+
+  if (opt$`max-median-p` < 1.0 && nrow(dmrs) > 0) {
+    dmrs <- safe_rbindlist(lapply(seq_len(nrow(dmrs)), function(i) {
+      row <- dmrs[i, ]
+      overlapping_windows <- win[chr == row$chr & direction == row$direction &
+                                   start >= row$start & end <= row$end]
+      if (median(overlapping_windows$p, na.rm = TRUE) <= opt$`max-median-p`) row else NULL
+    }))
+  }
+
+  if (opt$`post-filter`) dmrs <- post_filter_dmrs(dmrs, win, opt$`min-median-p`, opt$`min-consistent-frac`, opt$`p-seed`)
+  if (opt$`merge-overlaps`) dmrs <- merge_overlapping_dmrs(dmrs, win, max_gap_bp = opt$`merge-overlaps-gap`, p_seed = opt$`p-seed`)
+
+  dmrs <- add_delta_summary(dmrs, win)
+  fwrite(dmrs, sprintf("%s_dmrs_hybrid_seed.tsv", opt$`out-prefix`), sep = "\t")
+  write_bed(dmrs, sprintf("%s_dmrs_hybrid_seed.bed", opt$`out-prefix`))
+
 } else if (opt$`merge-mode` == "single_seed") {
   if (opt$`adaptive-delta`) {
     message("[INFO] Using adaptive delta threshold...")
-    # Stage 1: detect candidate DMRs with min-delta=0
     dmrs_initial <- detect_dmrs_single_seed(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`,
-                                             min_delta = 0, opt$`max-p-degradation`, opt$`max-final-p`, opt$`min-strong-windows`)
-    # Stage 2: compute adaptive threshold from delta distribution of candidate DMRs
+                                            min_delta = 0, opt$`max-p-degradation`, opt$`max-final-p`, opt$`min-strong-windows`)
     adaptive_min_delta <- calculate_adaptive_delta_threshold(dmrs_initial, win,
                                                               method = opt$`adaptive-delta-method`,
                                                               ratio = opt$`adaptive-delta-ratio`)
-    # Stage 3: re-detect with adaptive threshold
-    dmrs_single_seed <- detect_dmrs_single_seed(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`,
-                                                 adaptive_min_delta, opt$`max-p-degradation`, opt$`max-final-p`, opt$`min-strong-windows`)
+    dmrs <- detect_dmrs_single_seed(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`,
+                                    adaptive_min_delta, opt$`max-p-degradation`, opt$`max-final-p`, opt$`min-strong-windows`)
   } else {
-    dmrs_single_seed <- detect_dmrs_single_seed(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`,
-                                                 opt$`min-delta`, opt$`max-p-degradation`, opt$`max-final-p`, opt$`min-strong-windows`)
+    dmrs <- detect_dmrs_single_seed(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`,
+                                    opt$`min-delta`, opt$`max-p-degradation`, opt$`max-final-p`, opt$`min-strong-windows`)
   }
-  
-  # Edge trimming (optional)
-  if (opt$`trim-weak-edges`) {
-    dmrs_single_seed <- trim_dmr_edges(dmrs_single_seed, win, opt$`p-extend`)
-  }
-  
-  # DMR size filter
-  if (opt$`min-dmr-length` > 0) {
-    before_n <- nrow(dmrs_single_seed)
-    dmrs_single_seed <- dmrs_single_seed[end - start >= opt$`min-dmr-length`, ]
-    message("[INFO] DMR length filter (>= ", opt$`min-dmr-length`, " bp): ", before_n, " -> ", nrow(dmrs_single_seed))
-  }
-  
-  # Median p-value filter
-  if (opt$`max-median-p` < 1.0) {
-    before_n <- nrow(dmrs_single_seed)
-    dmrs_single_seed <- lapply(1:nrow(dmrs_single_seed), function(i) {
-      row <- dmrs_single_seed[i, ]
+
+  if (opt$`trim-weak-edges`) dmrs <- trim_dmr_edges(dmrs, win, opt$`p-extend`)
+  if (opt$`min-dmr-length` > 0) dmrs <- dmrs[end - start >= opt$`min-dmr-length`, ]
+
+  if (opt$`max-median-p` < 1.0 && nrow(dmrs) > 0) {
+    dmrs <- safe_rbindlist(lapply(seq_len(nrow(dmrs)), function(i) {
+      row <- dmrs[i, ]
       overlapping_windows <- win[chr == row$chr & direction == row$direction &
                                    start >= row$start & end <= row$end]
-      median_p <- median(overlapping_windows$p, na.rm = TRUE)
-      if (median_p <= opt$`max-median-p`) return(row) else return(NULL)
-    })
-    dmrs_single_seed <- data.table::rbindlist(dmrs_single_seed[!sapply(dmrs_single_seed, is.null)])
-    message("[INFO] Median p-value filter (<= ", opt$`max-median-p`, "): ", before_n, " -> ", nrow(dmrs_single_seed))
+      if (median(overlapping_windows$p, na.rm = TRUE) <= opt$`max-median-p`) row else NULL
+    }))
   }
-  
-  if (opt$`post-filter`) {
-    dmrs_single_seed <- post_filter_dmrs(dmrs_single_seed, win, opt$`min-median-p`, 
-                                         opt$`min-consistent-frac`, opt$`p-seed`)
-  }
-  if (opt$`merge-overlaps`) {
-    dmrs_single_seed <- merge_overlapping_dmrs(
-      dmrs_single_seed,
-      win,
-      max_gap_bp = opt$`merge-overlaps-gap`,
-      p_seed = opt$`p-seed`
-    )
-  }
-  dmrs_single_seed <- add_delta_summary(dmrs_single_seed, win)  # Add delta values
-  fwrite(dmrs_single_seed, sprintf("%s_dmrs_single_seed.tsv", opt$`out-prefix`), sep = "\t")
-  write_bed(dmrs_single_seed, sprintf("%s_dmrs_single_seed.bed", opt$`out-prefix`))  # BED output
+
+  if (opt$`post-filter`) dmrs <- post_filter_dmrs(dmrs, win, opt$`min-median-p`, opt$`min-consistent-frac`, opt$`p-seed`)
+  if (opt$`merge-overlaps`) dmrs <- merge_overlapping_dmrs(dmrs, win, max_gap_bp = opt$`merge-overlaps-gap`, p_seed = opt$`p-seed`)
+
+  dmrs <- add_delta_summary(dmrs, win)
+  fwrite(dmrs, sprintf("%s_dmrs_single_seed.tsv", opt$`out-prefix`), sep = "\t")
+  write_bed(dmrs, sprintf("%s_dmrs_single_seed.bed", opt$`out-prefix`))
 }
 
 message("[INFO] DMR analysis complete.")
