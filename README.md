@@ -12,7 +12,7 @@ Core scripts:
 - `BinomTest.py`: per-site binomial test with FDR-based filtering behavior.
 - `prepare_matrix.sh`: build two-group sliding-window matrices.
 - `run_glmmDMR.R`: fit GLMM per window (`binom`/`beta`, `aggregate`/`site`).
-- `DMR_merge.R`: merge significant windows into DMRs.
+- `merge_window.R`: merge significant windows into DMRs.
   - Supported `--merge-mode`: `single_seed`, `multi_seed`, `hybrid_seed`.
 - `make_binned_methylation_bigwig.R` (optional): generate binned methylation bigWig.
 - `make_binned_variance_bigwig.py` (optional): generate binned variance bigWig.
@@ -205,7 +205,7 @@ Rscript run_glmmDMR.R \
   --workers 8 --batches 200
 ```
 
-### Step 5: `DMR_merge.R`
+### Step 5: `merge_window.R`
 
 Input:
 
@@ -278,7 +278,7 @@ Overlap merge:
 Example:
 
 ```bash
-Rscript DMR_merge.R \
+Rscript merge_window.R \
   --windows glmm_out/WT_MT_CpG_fit_beta_aggregate.tsv.gz \
   --out-prefix dmr_out/WT_MT_CpG \
   --merge-mode hybrid_seed \
