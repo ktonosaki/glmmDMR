@@ -1,4 +1,4 @@
-# glmmDMR
+<img width="688" height="192" alt="image" src="https://github.com/user-attachments/assets/69e3cb66-97c3-4ea0-9b10-f512209b0fef" />
 
 glmmDMR is a small pipeline collection for DNA methylation analysis with window-level GLMM and DMR integration.
 
