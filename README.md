@@ -1,3 +1,5 @@
+(glmmDMR_logo.png)
+
 
 ## glmmDMR
 glmmDMR partitions DNA methylation data into fixed-size sliding windows and applies a generalized linear mixed model (GLMM) with methylated cytosine counts per window as the response variable. By modeling the comparison target as a fixed effect while accounting for biological replicates, the framework estimates window-level methylation differences and statistical significance while incorporating between-replicate variability. To construct DMRs from significant windows, three integration modes are implemented: (i) `multi_seed`, which statistically combines multiple adjacent moderate signals, (ii) `single_seed`, which starts from a strongly significant single window and expands the region, and (iii) `hybrid_seed`, which prioritizes `multi_seed` and complements uncovered regions with `single_seed`.
