@@ -7,7 +7,7 @@ Target scripts:
 - `BinomTest.py`
 - `prepare_matrix.sh`
 - `run_glmmDMR.R`
-- `DMR_merge.R`
+- `merge_window.R`
 - `make_binned_methylation_bigwig.R` (optional)
 - `make_binned_variance_bigwig.py` (optional)
 
@@ -258,7 +258,7 @@ Rscript run_glmmDMR.R \
   --workers 8 --batches 200 --max_globals_mb 2000
 ```
 
-## 3.5 `DMR_merge.R`
+## 3.5 `merge_window.R`
 
 - Integrates window-level significant signals into DMRs using the following three modes.
 
@@ -332,7 +332,7 @@ Main TSV columns:
 
 Example:
 ```bash
-Rscript DMR_merge.R \
+Rscript merge_window.R \
   --windows glmm_out/WT_MT_CpG_fit_beta_aggregate.tsv.gz \
   --out-prefix dmr_out/WT_MT_CpG \
   --merge-mode hybrid_seed \
