@@ -240,47 +240,67 @@ Rscript run_glmmDMR.R \
 
 ## 3.5 `DMR_merge.R`
 
-- window-level 有意シグナルを統合して DMR を構築。以下の５つのモードを実装している。
+- window-level 有意シグナルを統合して DMR を構築。以下の３つのモードを実装している。
 
 Supported merge modes:
-- `Simes`: 隣接 window の p 値を Simes 法で統合し、複数の中程度シグナルをまとめて評価。
-- `Stouffer`: 隣接 window の p 値を Z スコア化して統合し、広い領域の一貫した弱〜中シグナルを拾いやすい。
 - `single_seed`: 強い単独 seed window を起点に extension して DMR を構築する、保守的で解釈しやすいモード。
 - `multi_seed`: 有意 seed を複数含む領域を優先して連結するモードで、複数ピークを含む領域に強い。
 - `hybrid_seed`: `single_seed` と `multi_seed` の考え方を併用し、感度と特異度のバランスを狙う実用的なデフォルト。
 
 Options (major):
+
+Input / Output:
 - `--windows` (required): GLMM window 結果ファイル（`*_fit_<family>_<mode>.tsv.gz`）
 - `--out-prefix` (default: `results/dmr`): 出力 prefix
-- `--merge-mode` (default: `hybrid_seed`): 上記5種のみ有効
-- `--p-seed` (default: 0.05): seed 判定に使う p 閾値（全モードで使用）。
-- `--p-extend` (default: 0.01): extension の許容 p 閾値（`Stouffer`, `single_seed`, `multi_seed`, `hybrid_seed` で使用。`Simes` では未使用）。
-- `--max-gap-bp` (default: 200): 隣接 window を同一候補として連結する最大ギャップ（全モードで使用）。
-- `--min-windows` (default: 2): DMR として採用する最小 window 数（全モードで使用）。
-- `--merge-overlaps` / `--merge-overlaps-gap`: 検出後に同方向 DMR の重なり/近接を再マージ（`multi_seed` のみ有効）。
-- `--post-filter`: 候補 DMR の品質フィルタを有効化（`Stouffer`, `single_seed`, `multi_seed`, `hybrid_seed` で有効、`Simes` では未使用）。
-- `--min-median-p`, `--min-consistent-frac`: `--post-filter` 時の判定閾値（上記 post-filter 対応モードでのみ有効）。
-- `--min-delta`: extension 時の最小効果量しきい値（`single_seed`, `multi_seed`, `hybrid_seed` で有効。`Simes`, `Stouffer` では未使用）。
-- `--adaptive-delta`, `--adaptive-delta-method`, `--adaptive-delta-ratio`: delta しきい値をデータ依存で自動調整（`multi_seed` でのみ有効。`--adaptive-delta` を有効化した場合に使用）。
-- `--max-p-degradation`, `--max-final-p`, `--min-strong-windows`: seed 拡張中および最終採択時の厳しさ制御（`single_seed`, `multi_seed` で有効）。
-- `--trim-weak-edges`: DMR 両端の弱い window を削る（`single_seed`, `multi_seed` で有効）。
-- `--min-dmr-length`: 最終 DMR 長の下限フィルタ（`single_seed`, `multi_seed` で有効）。
-- `--max-median-p`: DMR 内 window の median p 上限（`single_seed`, `multi_seed` で有効）。
-- `--seed-min-windows` (default: 1): multi-seed の seed 構成に必要な最小 window 数（`multi_seed` でのみ有効）。
+
+Mode:
+- `--merge-mode` (default: `hybrid_seed`): 上記3種のみ有効
+
+Seed / Extension（検出コアパラメータ）:
+- `--p-seed` (default: 0.05): seed 判定に使う p 閾値
+- `--p-extend` (default: 0.01): extension の許容 p 閾値
+- `--max-gap-bp` (default: 200): 隣接 window を同一候補として連結する最大ギャップ
+- `--min-windows` (default: 2): DMR として採用する最小 window 数
+- `--min-delta` (default: 0): extension 時の最小効果量しきい値
+- `--max-p-degradation` (default: 1.2): extension 中に許容する p 値の悪化倍率（1.0 = 悪化禁止）
+- `--max-final-p` (default: 1.0): 最終 DMR の combined p 上限
+- `--min-strong-windows` (default: 0.5): 最終 DMR 内で p <= p-seed となる window の最小割合
+
+Adaptive delta threshold（効果量しきい値の自動調整）:
+- `--adaptive-delta`: 2段階検出で delta しきい値をデータから自動決定する
+- `--adaptive-delta-method` (default: `median_ratio`): しきい値算出方法（`median_ratio`, `q50`, `q25`, `q10`, `mad`）
+- `--adaptive-delta-ratio` (default: 0.6): `median_ratio` 時の比率
+
+Multi-seed specific:
+- `--seed-min-windows` (default: 1): multi-seed の seed 構成に必要な最小 window 数（`multi_seed` のみ）
+
+Post-filter（検出後の整合性チェック）:
+- `--post-filter`: 候補 DMR の品質フィルタを有効化
+- `--min-median-p` (default: 0.01): DMR 内 window の median p 上限（post-filter 判定）
+- `--min-consistent-frac` (default: 0.5): p <= p-seed となる window の最小割合（post-filter 判定）
+
+Edge / length / median-p filters（`single_seed`, `multi_seed` のみ）:
+- `--trim-weak-edges`: DMR 両端の弱い window（p > p-extend）を削る
+- `--min-dmr-length` (default: 0): 最終 DMR 長の下限（bp）
+- `--max-median-p` (default: 1.0): DMR 内 window の median p 上限（独立フィルタ）
+
+Overlap merge（検出後の再マージ）:
+- `--merge-overlaps`: 同方向 DMR の重なり/近接を再マージ
+- `--merge-overlaps-gap` (default: 0): 再マージ時に許容する DMR 間ギャップ（bp）
 
 Mode-wise option quick reference:
 
-| Option group | Simes | Stouffer | single_seed | multi_seed | hybrid_seed |
-|---|---|---|---|---|---|
-| Base (`--p-seed`, `--max-gap-bp`, `--min-windows`) | yes | yes | yes | yes | yes |
-| Extension threshold (`--p-extend`) | no | yes | yes | yes | yes |
-| Post-filter (`--post-filter`, `--min-median-p`, `--min-consistent-frac`) | no | yes | yes | yes | yes |
-| Delta threshold (`--min-delta`) | no | no | yes | yes | yes |
-| Adaptive delta (`--adaptive-delta*`) | no | no | no | yes | no |
-| Seed quality (`--max-p-degradation`, `--max-final-p`, `--min-strong-windows`) | no | no | yes | yes | no |
-| Edge/length/median filters (`--trim-weak-edges`, `--min-dmr-length`, `--max-median-p`) | no | no | yes | yes | no |
-| Overlap merge (`--merge-overlaps`, `--merge-overlaps-gap`) | no | no | no | yes | no |
-| Multi-seed seed size (`--seed-min-windows`) | no | no | no | yes | no |
+| Option group | single_seed | multi_seed | hybrid_seed |
+|---|---|---|---|
+| Base (`--p-seed`, `--max-gap-bp`, `--min-windows`) | yes | yes | yes |
+| Extension threshold (`--p-extend`) | yes | yes | yes |
+| Post-filter (`--post-filter`, `--min-median-p`, `--min-consistent-frac`) | yes | yes | yes |
+| Delta threshold (`--min-delta`) | yes | yes | yes |
+| Adaptive delta (`--adaptive-delta*`) | yes | yes | yes |
+| Seed quality (`--max-p-degradation`, `--max-final-p`, `--min-strong-windows`) | yes | yes | yes |
+| Edge/length/median filters (`--trim-weak-edges`, `--min-dmr-length`, `--max-median-p`) | yes | yes | no |
+| Overlap merge (`--merge-overlaps`, `--merge-overlaps-gap`) | yes | yes | yes |
+| Multi-seed seed size (`--seed-min-windows`) | no | yes | no |
 
 `--adaptive-delta*` = `--adaptive-delta`, `--adaptive-delta-method`, `--adaptive-delta-ratio`.
 
@@ -291,7 +311,7 @@ Output format (mode別):
 - TSV: `*_dmrs_<mode>.tsv`
 - BED: `*_dmrs_<mode>.bed`
 - 主な列: `chr,start,end,n_windows,direction,combined_p`
-- mode により `strong_frac`, `simes_p/stouffer_p`, `delta_mean/delta_max` が付加
+- mode により `strong_frac`, `delta_mean/delta_max` が付加
 
 Example:
 ```bash
