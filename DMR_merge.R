@@ -12,8 +12,8 @@ option_list <- list(
               help="GLMM window-level results (tsv/tsv.gz). Required."),
   make_option(c("--out-prefix"), type="character", default="results/dmr",
               help="Output prefix for results [default %default]"),
-  make_option(c("--merge-mode"), type="character", default="combined",
-              help="DMR merge strategy: Simes, Stouffer, combined, single_seed, stouffer_multi_seed, hybrid_seed, simes_extended, fdr_filter, hierarchical, or weighted [default %default]"),
+  make_option(c("--merge-mode"), type="character", default="hybrid_seed",
+              help="DMR merge strategy: Simes, Stouffer, single_seed, multi_seed, hybrid_seed [default %default]"),
   make_option(c("--p-seed"), type="numeric", default=0.05,
               help="Seed p-value threshold for starting a DMR [default %default]"),
   make_option(c("--p-extend"), type="numeric", default=0.01,
@@ -26,8 +26,6 @@ option_list <- list(
               help="Max gap (bp) to merge overlapping DMRs [default %default]"),
   make_option(c("--min-windows"), type="integer", default=2,
               help="Minimum windows for a DMR [default %default]"),
-  make_option(c("--fdr"), type="numeric", default=0.05,
-              help="FDR threshold for filtering windows [default %default]"),
   make_option(c("--post-filter"), action="store_true", default=FALSE,
               help="Enable post-filtering to reduce false positives [default %default]"),
   make_option(c("--min-median-p"), type="numeric", default=0.01,
@@ -413,88 +411,6 @@ detect_dmrs_stouffer <- function(win, p_seed, p_extend, max_gap_bp, min_windows)
   return(data.table::rbindlist(res))
 }
 
-# Simes Extended法: gap緩和 + p_extend判定 + スキップ戦略
-detect_dmrs_simes_extended <- function(win, p_seed, p_extend, max_gap_bp, min_windows, min_delta = 0) {
-  message("[INFO] Simes-extended: gap=", max_gap_bp * 2, "bp, p_extend=", p_extend, " threshold")
-  res <- list()
-  i <- 1L
-  n <- nrow(win)
-  extended_gap <- max_gap_bp * 2  # gap制限を2倍に緩和
-  
-  while (i <= n) {
-    if (win$p[i] > p_seed) {
-      i <- i + 1
-      next
-    }
-    chr <- win$chr[i]
-    direction <- win$direction[i]
-    run_idx <- i
-    
-    # 前方拡張（緩いgap制限 + Simes p値チェック + スキップ戦略）
-    j <- i + 1
-    while (j <= n && win$chr[j] == chr && win$direction[j] == direction) {
-      gap <- win$start[j] - win$end[max(run_idx)]
-      if (gap > extended_gap) break  # 通常の2倍まで許容
-      
-      # 効果量フィルタ（設定されている場合）- スキップして次を探索
-      if (min_delta > 0 && abs(win$delta[j]) < min_delta) {
-        j <- j + 1
-        next  # スキップして次へ
-      }
-      
-      test_idx <- c(run_idx, j)
-      simes_p <- p_simes(win$p[test_idx])
-      
-      # p_extendで判定（Simesより緩い）
-      if (simes_p <= p_extend) {
-        run_idx <- test_idx
-        j <- j + 1
-      } else {
-        j <- j + 1  # 条件を満たさなくてもスキップして探索継続
-      }
-    }
-    
-    # 後方拡張（緩いgap制限 + Simes p値チェック + スキップ戦略）
-    k <- i - 1
-    while (k >= 1 && win$chr[k] == chr && win$direction[k] == direction) {
-      gap <- win$start[min(run_idx)] - win$end[k]
-      if (gap > extended_gap) break
-      
-      # 効果量フィルタ - スキップして次を探索
-      if (min_delta > 0 && abs(win$delta[k]) < min_delta) {
-        k <- k - 1
-        next
-      }
-      
-      test_idx <- c(k, run_idx)
-      simes_p <- p_simes(win$p[test_idx])
-      
-      if (simes_p <= p_extend) {
-        run_idx <- test_idx
-        k <- k - 1
-      } else {
-        k <- k - 1  # 条件を満たさなくてもスキップして探索継続
-      }
-    }
-    
-    # 最終Simes統合p値を計算
-    final_simes_p <- p_simes(win$p[run_idx])
-    if (length(run_idx) >= min_windows && final_simes_p <= p_extend) {
-      res[[length(res) + 1]] <- list(
-        chr = chr,
-        start = min(win$start[run_idx]),
-        end = max(win$end[run_idx]),
-        n_windows = length(run_idx),
-        direction = direction,
-        combined_p = final_simes_p
-      )
-    }
-    i <- max(run_idx) + 1
-  }
-  
-  return(data.table::rbindlist(res))
-}
-
 # Single Seed法でDMRを検出(単一窓シードからStouffer法で双方向拡張)
 detect_dmrs_single_seed <- function(win, p_seed, p_extend, max_gap_bp, min_windows, min_delta = 0, 
                                     max_p_degradation = 1.2, max_final_p = 1.0, min_strong_windows = 0.5) {
@@ -730,157 +646,6 @@ detect_dmrs_stouffer_multi_seed <- function(win, p_seed, p_extend, max_gap_bp, m
   return(data.table::rbindlist(res))
 }
 
-# Hybrid Seed法: stouffer_multi_seed優先 + single_seed補完
-detect_dmrs_hybrid_seed <- function(win, p_seed, p_extend, max_gap_bp, min_windows, min_delta = 0,
-                                    max_p_degradation = 1.2, max_final_p = 1.0, min_strong_windows = 0.5,
-                                    seed_min_windows = 2) {
-  message("[INFO] Hybrid seed detection: stouffer_multi_seed (primary) + single_seed (complementary)")
-  
-  # Step 1: stouffer_multi_seed法でDMR検出
-  dmrs_multi <- detect_dmrs_stouffer_multi_seed(win, p_seed, p_extend, max_gap_bp, min_windows, 
-                                                 min_delta, max_p_degradation, max_final_p, 
-                                                 min_strong_windows, seed_min_windows)
-  
-  if (nrow(dmrs_multi) > 0) {
-    dmrs_multi[, detection_method := "stouffer_multi_seed"]
-    message("[INFO] Stouffer_multi_seed detected ", nrow(dmrs_multi), " DMRs")
-  } else {
-    dmrs_multi <- data.table(chr = character(), start = integer(), end = integer(), 
-                             n_windows = integer(), direction = character(), 
-                             combined_p = numeric(), strong_frac = numeric(),
-                             detection_method = character())
-    message("[INFO] No DMRs detected by stouffer_multi_seed")
-  }
-  
-  # Step 2: カバーされたウィンドウを特定
-  covered_idx <- c()
-  if (nrow(dmrs_multi) > 0) {
-    for (i in 1:nrow(dmrs_multi)) {
-      dmr <- dmrs_multi[i, ]
-      overlapping <- which(win$chr == dmr$chr & 
-                          win$direction == dmr$direction &
-                          win$start >= dmr$start & 
-                          win$end <= dmr$end)
-      covered_idx <- c(covered_idx, overlapping)
-    }
-    covered_idx <- unique(covered_idx)
-    message("[INFO] Stouffer_multi_seed covered ", length(covered_idx), " windows")
-  }
-  
-  # Step 3: 残りのウィンドウでsingle_seed法を実行
-  remaining_win <- win[!seq_len(nrow(win)) %in% covered_idx]
-  
-  if (nrow(remaining_win) > 0) {
-    message("[INFO] Running single_seed on ", nrow(remaining_win), " remaining windows")
-    dmrs_single <- detect_dmrs_single_seed(remaining_win, p_seed, p_extend, max_gap_bp, min_windows,
-                                           min_delta, max_p_degradation, max_final_p, min_strong_windows)
-    
-    if (nrow(dmrs_single) > 0) {
-      dmrs_single[, detection_method := "single_seed"]
-      message("[INFO] Single_seed detected ", nrow(dmrs_single), " additional DMRs")
-    } else {
-      dmrs_single <- data.table(chr = character(), start = integer(), end = integer(),
-                               n_windows = integer(), direction = character(),
-                               combined_p = numeric(), strong_frac = numeric(),
-                               detection_method = character())
-      message("[INFO] No additional DMRs detected by single_seed")
-    }
-  } else {
-    dmrs_single <- data.table(chr = character(), start = integer(), end = integer(),
-                             n_windows = integer(), direction = character(),
-                             combined_p = numeric(), strong_frac = numeric(),
-                             detection_method = character())
-    message("[INFO] All windows covered by stouffer_multi_seed, skipping single_seed")
-  }
-  
-  # Step 4: 統合
-  dmrs_hybrid <- rbind(dmrs_multi, dmrs_single)
-  
-  if (nrow(dmrs_hybrid) > 0) {
-    dmrs_hybrid <- dmrs_hybrid[order(chr, start)]
-    message("[INFO] Hybrid method detected total ", nrow(dmrs_hybrid), " DMRs")
-    message("[INFO]   - stouffer_multi_seed: ", sum(dmrs_hybrid$detection_method == "stouffer_multi_seed"))
-    message("[INFO]   - single_seed: ", sum(dmrs_hybrid$detection_method == "single_seed"))
-  }
-  
-  return(dmrs_hybrid)
-}
-
-# Hybrid Parallel法: 並列実行 + 品質ベース統合（より高度なアプローチ）
-detect_dmrs_hybrid_parallel <- function(win, p_seed, p_extend, max_gap_bp, min_windows, min_delta = 0,
-                                        max_p_degradation = 1.2, max_final_p = 1.0, min_strong_windows = 0.5,
-                                        seed_min_windows = 2) {
-  message("[INFO] Hybrid parallel detection: both methods in parallel, then quality-based merging")
-  
-  # Step 1: 両方のメソッドを並列実行（完全なウィンドウセットで）
-  dmrs_multi <- detect_dmrs_stouffer_multi_seed(win, p_seed, p_extend, max_gap_bp, min_windows,
-                                                 min_delta, max_p_degradation, max_final_p,
-                                                 min_strong_windows, seed_min_windows)
-  
-  dmrs_single <- detect_dmrs_single_seed(win, p_seed, p_extend, max_gap_bp, min_windows,
-                                         min_delta, max_p_degradation, max_final_p, min_strong_windows)
-  
-  if (nrow(dmrs_multi) > 0) dmrs_multi[, detection_method := "stouffer_multi_seed"]
-  if (nrow(dmrs_single) > 0) dmrs_single[, detection_method := "single_seed"]
-  
-  message("[INFO] Stouffer_multi_seed: ", nrow(dmrs_multi), " DMRs")
-  message("[INFO] Single_seed: ", nrow(dmrs_single), " DMRs")
-  
-  # Step 2: 重複解消 - オーバーラップ判定と品質ベース選択
-  if (nrow(dmrs_multi) == 0 && nrow(dmrs_single) == 0) {
-    return(data.table(chr = character(), start = integer(), end = integer(),
-                     n_windows = integer(), direction = character(),
-                     combined_p = numeric(), strong_frac = numeric(),
-                     detection_method = character()))
-  }
-  
-  if (nrow(dmrs_multi) == 0) {
-    message("[INFO] No multi_seed DMRs, using all single_seed DMRs")
-    return(dmrs_single)
-  }
-  
-  if (nrow(dmrs_single) == 0) {
-    message("[INFO] No single_seed DMRs, using all multi_seed DMRs")
-    return(dmrs_multi)
-  }
-  
-  # 重複チェック: multi_seed DMRとoverlapするsingle_seed DMRを特定
-  keep_single <- rep(TRUE, nrow(dmrs_single))
-  
-  for (i in 1:nrow(dmrs_single)) {
-    dmr_s <- dmrs_single[i, ]
-    
-    # multi_seed DMRとのオーバーラップチェック
-    for (j in 1:nrow(dmrs_multi)) {
-      dmr_m <- dmrs_multi[j, ]
-      
-      # 同一染色体・同一方向でオーバーラップ判定
-      if (dmr_s$chr == dmr_m$chr && dmr_s$direction == dmr_m$direction) {
-        overlap <- !(dmr_s$end < dmr_m$start || dmr_s$start > dmr_m$end)
-        
-        if (overlap) {
-          # オーバーラップあり: multi_seedを優先（高精度）
-          keep_single[i] <- FALSE
-          message("[DEBUG] Overlap detected: single_seed DMR ", i, 
-                  " overlaps with multi_seed DMR ", j, " -> prioritizing multi_seed")
-          break
-        }
-      }
-    }
-  }
-  
-  # Step 3: 統合（multi_seed全て + 非オーバーラップのsingle_seed）
-  dmrs_final <- rbind(dmrs_multi, dmrs_single[keep_single, ])
-  dmrs_final <- dmrs_final[order(chr, start)]
-  
-  message("[INFO] Final DMRs after quality-based merging: ", nrow(dmrs_final))
-  message("[INFO]   - stouffer_multi_seed (kept): ", sum(dmrs_final$detection_method == "stouffer_multi_seed"))
-  message("[INFO]   - single_seed (kept): ", sum(dmrs_final$detection_method == "single_seed"))
-  message("[INFO]   - single_seed (discarded by overlap): ", sum(!keep_single))
-  
-  return(dmrs_final)
-}
-
 detect_dmrs_combined <- function(win, p_seed, p_extend, max_gap_bp, min_windows, min_delta = 0) {
   res <- list()
   i <- 1L
@@ -994,174 +759,14 @@ detect_dmrs_combined <- function(win, p_seed, p_extend, max_gap_bp, min_windows,
   return(data.table::rbindlist(res))
 }
 
-# 階層的マージ: FDR検出後に近接DMRを統合
-detect_dmrs_hierarchical <- function(win, fdr_threshold, max_gap_bp, min_windows, merge_gap_bp = 500) {
-  message("[INFO] Hierarchical merging with merge gap: ", merge_gap_bp, " bp")
-  # まずFDRでDMRを検出
-  dmrs <- detect_dmrs_fdr(win, fdr_threshold, max_gap_bp, min_windows)
-  if (nrow(dmrs) == 0) return(dmrs)
-  
-  # 近接DMRをマージ
-  dmrs <- dmrs[order(chr, start)]
-  merged <- list()
-  i <- 1
-  while (i <= nrow(dmrs)) {
-    current <- dmrs[i, ]
-    candidates <- i
-    j <- i + 1
-    
-    # 同じchr/directionで近接するDMRを収集
-    while (j <= nrow(dmrs) && 
-           dmrs$chr[j] == current$chr && 
-           dmrs$direction[j] == current$direction) {
-      gap <- dmrs$start[j] - current$end
-      if (gap <= merge_gap_bp) {
-        candidates <- c(candidates, j)
-        current$end <- dmrs$end[j]
-        j <- j + 1
-      } else {
-        break
-      }
-    }
-    
-    # マージされたDMRの窓を取得して統合p値を再計算
-    merged_windows <- win[chr == current$chr & 
-                           direction == current$direction &
-                           start >= dmrs$start[min(candidates)] &
-                           end <= dmrs$end[max(candidates)]]
-    if (nrow(merged_windows) >= min_windows) {
-      simes_p <- p_simes(merged_windows$p)
-      merged[[length(merged) + 1]] <- list(
-        chr = current$chr,
-        start = dmrs$start[min(candidates)],
-        end = dmrs$end[max(candidates)],
-        n_windows = sum(dmrs$n_windows[candidates]),
-        direction = current$direction,
-        combined_p = simes_p
-      )
-    }
-    i <- max(candidates) + 1
-  }
-  return(data.table::rbindlist(merged))
-}
-
-# 効果量重み付き統合: deltaを重みとして使用
-detect_dmrs_weighted <- function(win, p_seed, p_extend, max_gap_bp, min_windows) {
-  message("[INFO] Effect-weighted DMR detection")
-  res <- list()
-  i <- 1L
-  n <- nrow(win)
-  
-  while (i <= n) {
-    if (win$p[i] > p_seed) {
-      i <- i + 1
-      next
-    }
-    chr <- win$chr[i]
-    direction <- win$direction[i]
-    run_idx <- i
-    
-    # 前方拡張(delta重み付きStouffer)
-    j <- i + 1
-    while (j <= n && win$chr[j] == chr && win$direction[j] == direction) {
-      gap <- win$start[j] - win$end[max(run_idx)]
-      if (gap > max_gap_bp) break
-      test_idx <- c(run_idx, j)
-      # delta絶対値を重みとして使用
-      weights <- abs(win$delta[test_idx])
-      weights <- weights / sum(weights)  # 正規化
-      z_scores <- qnorm(1 - win$p[test_idx])
-      weighted_z <- sum(z_scores * weights) / sqrt(sum(weights^2))
-      weighted_p <- 2 * pnorm(-abs(weighted_z))
-      if (weighted_p <= p_extend) {
-        run_idx <- test_idx
-        j <- j + 1
-      } else {
-        break
-      }
-    }
-    
-    # 後方拡張(delta重み付きStouffer)
-    k <- i - 1
-    while (k >= 1 && win$chr[k] == chr && win$direction[k] == direction) {
-      gap <- win$start[min(run_idx)] - win$end[k]
-      if (gap > max_gap_bp) break
-      test_idx <- c(k, run_idx)
-      weights <- abs(win$delta[test_idx])
-      weights <- weights / sum(weights)
-      z_scores <- qnorm(1 - win$p[test_idx])
-      weighted_z <- sum(z_scores * weights) / sqrt(sum(weights^2))
-      weighted_p <- 2 * pnorm(-abs(weighted_z))
-      if (weighted_p <= p_extend) {
-        run_idx <- test_idx
-        k <- k - 1
-      } else {
-        break
-      }
-    }
-    
-    # 最終統合p値
-    if (length(run_idx) >= min_windows) {
-      weights <- abs(win$delta[run_idx])
-      weights <- weights / sum(weights)
-      z_scores <- qnorm(1 - win$p[run_idx])
-      weighted_z <- sum(z_scores * weights) / sqrt(sum(weights^2))
-      final_weighted_p <- 2 * pnorm(-abs(weighted_z))
-      res[[length(res) + 1]] <- list(
-        chr = chr,
-        start = min(win$start[run_idx]),
-        end = max(win$end[run_idx]),
-        n_windows = length(run_idx),
-        direction = direction,
-        combined_p = final_weighted_p
-      )
-    }
-    i <- max(run_idx) + 1
-  }
-  return(data.table::rbindlist(res))
-}
-
-# FDR方式でウィンドウを統合
-detect_dmrs_fdr <- function(win, fdr_threshold, max_gap_bp, min_windows) {
-  message("[INFO] Applying FDR correction with threshold: ", fdr_threshold)
-  # FDR補正を実行
-  win[, p_adj := p.adjust(p, method = "fdr")]
-  # 閾値に基づいてフィルタリング
-  win_filtered <- win[p_adj <= fdr_threshold]
-  
-  # 隣接するウィンドウ同士を統合
-  res <- list()
-  i <- 1L
-  n <- nrow(win_filtered)
-  while (i <= n) {
-    chr <- win_filtered$chr[i]
-    direction <- win_filtered$direction[i]
-    run_idx <- i
-    j <- i + 1
-    while (j <= n && win_filtered$chr[j] == chr && win_filtered$direction[j] == direction) {
-      gap <- win_filtered$start[j] - win_filtered$end[j - 1]
-      if (gap > max_gap_bp) break
-      run_idx <- c(run_idx, j)
-      j <- j + 1
-    }
-    if (length(run_idx) >= min_windows) {
-      res[[length(res) + 1]] <- list(
-        chr = chr,
-        start = min(win_filtered$start[run_idx]),
-        end = max(win_filtered$end[run_idx]),
-        n_windows = length(run_idx),
-        direction = direction
-      )
-    }
-    i <- max(run_idx) + 1
-  }
-  
-  return(data.table::rbindlist(res))
-}
-
 #========================= Main Script ==========================================
 win <- load_data(opt$windows)
 
+valid_modes <- c("Simes", "Stouffer", "single_seed", "multi_seed", "hybrid_seed")
+if (!opt$`merge-mode` %in% valid_modes) {
+  stop(sprintf("Invalid --merge-mode '%s'. Must be one of: %s",
+               opt$`merge-mode`, paste(valid_modes, collapse = ", ")))
+}
 
 if (opt$`merge-mode` == "Simes") {
   dmrs_simes <- detect_dmrs_simes(win, opt$`p-seed`, opt$`max-gap-bp`, opt$`min-windows`)
@@ -1177,7 +782,7 @@ if (opt$`merge-mode` == "Simes") {
   dmrs_stouffer <- add_delta_summary(dmrs_stouffer, win)  # Delta値を追加
   fwrite(dmrs_stouffer, sprintf("%s_dmrs_stouffer.tsv", opt$`out-prefix`), sep = "\t")
   write_bed(dmrs_stouffer, sprintf("%s_dmrs_stouffer.bed", opt$`out-prefix`))  # BED出力
-} else if (opt$`merge-mode` == "stouffer_multi_seed") {
+} else if (opt$`merge-mode` == "multi_seed") {
   # 適応的delta閾値を使用する場合: まず緩い条件でDMRを検出
   if (opt$`adaptive-delta`) {
     message("[INFO] Using adaptive delta threshold...")
@@ -1236,18 +841,18 @@ if (opt$`merge-mode` == "Simes") {
       p_seed = opt$`p-seed`
     )
   }
-  dmrs_stouffer_ms <- add_delta_summary(dmrs_stouffer_ms, win)
-  fwrite(dmrs_stouffer_ms, sprintf("%s_dmrs_stouffer_multi_seed.tsv", opt$`out-prefix`), sep = "\t")
-  write_bed(dmrs_stouffer_ms, sprintf("%s_dmrs_stouffer_multi_seed.bed", opt$`out-prefix`))
-} else if (opt$`merge-mode` == "combined") {
-  dmrs_combined <- detect_dmrs_combined(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`, opt$`min-delta`)
+  dmrs_multi_seed <- add_delta_summary(dmrs_stouffer_ms, win)
+  fwrite(dmrs_multi_seed, sprintf("%s_dmrs_multi_seed.tsv", opt$`out-prefix`), sep = "\t")
+  write_bed(dmrs_multi_seed, sprintf("%s_dmrs_multi_seed.bed", opt$`out-prefix`))
+} else if (opt$`merge-mode` == "hybrid_seed") {
+  dmrs_hybrid_seed <- detect_dmrs_combined(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`, opt$`min-delta`)
   if (opt$`post-filter`) {
-    dmrs_combined <- post_filter_dmrs(dmrs_combined, win, opt$`min-median-p`, 
-                                      opt$`min-consistent-frac`, opt$`p-seed`)
+    dmrs_hybrid_seed <- post_filter_dmrs(dmrs_hybrid_seed, win, opt$`min-median-p`,
+                                         opt$`min-consistent-frac`, opt$`p-seed`)
   }
-  dmrs_combined <- add_delta_summary(dmrs_combined, win)  # Delta値を追加
-  fwrite(dmrs_combined, sprintf("%s_dmrs_combined.tsv", opt$`out-prefix`), sep = "\t")
-  write_bed(dmrs_combined, sprintf("%s_dmrs_combined.bed", opt$`out-prefix`))  # BED出力
+  dmrs_hybrid_seed <- add_delta_summary(dmrs_hybrid_seed, win)  # Delta値を追加
+  fwrite(dmrs_hybrid_seed, sprintf("%s_dmrs_hybrid_seed.tsv", opt$`out-prefix`), sep = "\t")
+  write_bed(dmrs_hybrid_seed, sprintf("%s_dmrs_hybrid_seed.bed", opt$`out-prefix`))  # BED出力
 } else if (opt$`merge-mode` == "single_seed") {
   dmrs_single_seed <- detect_dmrs_single_seed(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`, 
                                               opt$`min-delta`, opt$`max-p-degradation`, opt$`max-final-p`, opt$`min-strong-windows`)
@@ -1285,163 +890,6 @@ if (opt$`merge-mode` == "Simes") {
   dmrs_single_seed <- add_delta_summary(dmrs_single_seed, win)  # Delta値を追加
   fwrite(dmrs_single_seed, sprintf("%s_dmrs_single_seed.tsv", opt$`out-prefix`), sep = "\t")
   write_bed(dmrs_single_seed, sprintf("%s_dmrs_single_seed.bed", opt$`out-prefix`))  # BED出力
-} else if (opt$`merge-mode` == "hybrid_seed") {
-  # 適応的delta閾値を使用する場合
-  if (opt$`adaptive-delta`) {
-    message("[INFO] Hybrid seed with adaptive delta threshold...")
-    # 第1段階: min-delta=0でDMR候補を検出（stouffer_multi_seed優先）
-    dmrs_initial <- detect_dmrs_stouffer_multi_seed(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`,
-                                                     min_delta = 0, opt$`max-p-degradation`, opt$`max-final-p`, opt$`min-strong-windows`,
-                                                     seed_min_windows = opt$`seed-min-windows`)
-    
-    # 第2段階: 適応的閾値を計算
-    adaptive_min_delta <- calculate_adaptive_delta_threshold(dmrs_initial, win,
-                                                              method = opt$`adaptive-delta-method`,
-                                                              ratio = opt$`adaptive-delta-ratio`)
-    
-    # 第3段階: 適応的閾値でhybrid検出
-    dmrs_hybrid <- detect_dmrs_hybrid_seed(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`,
-                                           adaptive_min_delta, opt$`max-p-degradation`, opt$`max-final-p`, opt$`min-strong-windows`,
-                                           seed_min_windows = opt$`seed-min-windows`)
-  } else {
-    dmrs_hybrid <- detect_dmrs_hybrid_seed(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`,
-                                           opt$`min-delta`, opt$`max-p-degradation`, opt$`max-final-p`, opt$`min-strong-windows`,
-                                           seed_min_windows = opt$`seed-min-windows`)
-  }
-  
-  # 境界トリミング（オプション）
-  if (opt$`trim-weak-edges`) {
-    dmrs_hybrid <- trim_dmr_edges(dmrs_hybrid, win, opt$`p-extend`)
-  }
-  
-  # DMRサイズフィルタ
-  if (opt$`min-dmr-length` > 0) {
-    before_n <- nrow(dmrs_hybrid)
-    dmrs_hybrid <- dmrs_hybrid[end - start >= opt$`min-dmr-length`, ]
-    message("[INFO] DMR length filter (>= ", opt$`min-dmr-length`, " bp): ", before_n, " -> ", nrow(dmrs_hybrid))
-  }
-  
-  # 中央値p値フィルタ
-  if (opt$`max-median-p` < 1.0 && nrow(dmrs_hybrid) > 0) {
-    before_n <- nrow(dmrs_hybrid)
-    dmrs_hybrid <- lapply(1:nrow(dmrs_hybrid), function(i) {
-      row <- dmrs_hybrid[i, ]
-      overlapping_windows <- win[chr == row$chr & direction == row$direction &
-                                   start >= row$start & end <= row$end]
-      median_p <- median(overlapping_windows$p, na.rm = TRUE)
-      if (median_p <= opt$`max-median-p`) return(row) else return(NULL)
-    })
-    dmrs_hybrid <- data.table::rbindlist(dmrs_hybrid[!sapply(dmrs_hybrid, is.null)])
-    message("[INFO] Median p-value filter (<= ", opt$`max-median-p`, "): ", before_n, " -> ", nrow(dmrs_hybrid))
-  }
-  
-  if (opt$`post-filter`) {
-    dmrs_hybrid <- post_filter_dmrs(dmrs_hybrid, win, opt$`min-median-p`,
-                                    opt$`min-consistent-frac`, opt$`p-seed`)
-  }
-  if (opt$`merge-overlaps`) {
-    dmrs_hybrid <- merge_overlapping_dmrs(
-      dmrs_hybrid,
-      win,
-      max_gap_bp = opt$`merge-overlaps-gap`,
-      p_seed = opt$`p-seed`
-    )
-  }
-  dmrs_hybrid <- add_delta_summary(dmrs_hybrid, win)
-  fwrite(dmrs_hybrid, sprintf("%s_dmrs_hybrid_seed.tsv", opt$`out-prefix`), sep = "\t")
-  write_bed(dmrs_hybrid, sprintf("%s_dmrs_hybrid_seed.bed", opt$`out-prefix`))
-} else if (opt$`merge-mode` == "hybrid_parallel") {
-  # 適応的delta閾値を使用する場合
-  if (opt$`adaptive-delta`) {
-    message("[INFO] Hybrid parallel with adaptive delta threshold...")
-    # 第1段階: min-delta=0でDMR候補を検出（両方のメソッドで）
-    dmrs_initial_multi <- detect_dmrs_stouffer_multi_seed(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`,
-                                                           min_delta = 0, opt$`max-p-degradation`, opt$`max-final-p`, opt$`min-strong-windows`,
-                                                           seed_min_windows = opt$`seed-min-windows`)
-    dmrs_initial_single <- detect_dmrs_single_seed(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`,
-                                                    min_delta = 0, opt$`max-p-degradation`, opt$`max-final-p`, opt$`min-strong-windows`)
-    
-    # 両方の結果を統合して適応的閾値を計算
-    dmrs_initial_combined <- rbind(dmrs_initial_multi, dmrs_initial_single)
-    adaptive_min_delta <- calculate_adaptive_delta_threshold(dmrs_initial_combined, win,
-                                                              method = opt$`adaptive-delta-method`,
-                                                              ratio = opt$`adaptive-delta-ratio`)
-    
-    # 第2段階: 適応的閾値でhybrid_parallel検出
-    dmrs_hybrid_par <- detect_dmrs_hybrid_parallel(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`,
-                                                    adaptive_min_delta, opt$`max-p-degradation`, opt$`max-final-p`, opt$`min-strong-windows`,
-                                                    seed_min_windows = opt$`seed-min-windows`)
-  } else {
-    dmrs_hybrid_par <- detect_dmrs_hybrid_parallel(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`,
-                                                    opt$`min-delta`, opt$`max-p-degradation`, opt$`max-final-p`, opt$`min-strong-windows`,
-                                                    seed_min_windows = opt$`seed-min-windows`)
-  }
-  
-  # 境界トリミング（オプション）
-  if (opt$`trim-weak-edges`) {
-    dmrs_hybrid_par <- trim_dmr_edges(dmrs_hybrid_par, win, opt$`p-extend`)
-  }
-  
-  # DMRサイズフィルタ
-  if (opt$`min-dmr-length` > 0) {
-    before_n <- nrow(dmrs_hybrid_par)
-    dmrs_hybrid_par <- dmrs_hybrid_par[end - start >= opt$`min-dmr-length`, ]
-    message("[INFO] DMR length filter (>= ", opt$`min-dmr-length`, " bp): ", before_n, " -> ", nrow(dmrs_hybrid_par))
-  }
-  
-  # 中央値p値フィルタ
-  if (opt$`max-median-p` < 1.0 && nrow(dmrs_hybrid_par) > 0) {
-    before_n <- nrow(dmrs_hybrid_par)
-    dmrs_hybrid_par <- lapply(1:nrow(dmrs_hybrid_par), function(i) {
-      row <- dmrs_hybrid_par[i, ]
-      overlapping_windows <- win[chr == row$chr & direction == row$direction &
-                                   start >= row$start & end <= row$end]
-      median_p <- median(overlapping_windows$p, na.rm = TRUE)
-      if (median_p <= opt$`max-median-p`) return(row) else return(NULL)
-    })
-    dmrs_hybrid_par <- data.table::rbindlist(dmrs_hybrid_par[!sapply(dmrs_hybrid_par, is.null)])
-    message("[INFO] Median p-value filter (<= ", opt$`max-median-p`, "): ", before_n, " -> ", nrow(dmrs_hybrid_par))
-  }
-  
-  if (opt$`post-filter`) {
-    dmrs_hybrid_par <- post_filter_dmrs(dmrs_hybrid_par, win, opt$`min-median-p`,
-                                        opt$`min-consistent-frac`, opt$`p-seed`)
-  }
-  dmrs_hybrid_par <- add_delta_summary(dmrs_hybrid_par, win)
-  fwrite(dmrs_hybrid_par, sprintf("%s_dmrs_hybrid_parallel.tsv", opt$`out-prefix`), sep = "\t")
-  write_bed(dmrs_hybrid_par, sprintf("%s_dmrs_hybrid_parallel.bed", opt$`out-prefix`))
-} else if (opt$`merge-mode` == "simes_extended") {
-  dmrs_simes_ext <- detect_dmrs_simes_extended(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`, opt$`min-delta`)
-  dmrs_simes_ext <- add_delta_summary(dmrs_simes_ext, win)
-  fwrite(dmrs_simes_ext, sprintf("%s_dmrs_simes_extended.tsv", opt$`out-prefix`), sep = "\t")
-  write_bed(dmrs_simes_ext, sprintf("%s_dmrs_simes_extended.bed", opt$`out-prefix`))
-} else if (opt$`merge-mode` == "fdr_filter") {
-  dmrs_fdr <- detect_dmrs_fdr(win, opt$fdr, opt$`max-gap-bp`, opt$`min-windows`)
-  if (nrow(dmrs_fdr) > 0) {
-    dmrs_fdr <- add_delta_summary(dmrs_fdr, win)  # Delta値を追加
-    fwrite(dmrs_fdr, sprintf("%s_dmrs_fdr.tsv", opt$`out-prefix`), sep = "\t")
-    write_bed(dmrs_fdr, sprintf("%s_dmrs_fdr.bed", opt$`out-prefix`))  # BED出力
-  } else {
-    message("[INFO] No DMRs detected after FDR filtering.")
-  }
-} else if (opt$`merge-mode` == "hierarchical") {
-  dmrs_hierarchical <- detect_dmrs_hierarchical(win, opt$fdr, opt$`max-gap-bp`, opt$`min-windows`, merge_gap_bp = 500)
-  if (nrow(dmrs_hierarchical) > 0) {
-    dmrs_hierarchical <- add_delta_summary(dmrs_hierarchical, win)
-    fwrite(dmrs_hierarchical, sprintf("%s_dmrs_hierarchical.tsv", opt$`out-prefix`), sep = "\t")
-    write_bed(dmrs_hierarchical, sprintf("%s_dmrs_hierarchical.bed", opt$`out-prefix`))
-  } else {
-    message("[INFO] No DMRs detected with hierarchical merging.")
-  }
-} else if (opt$`merge-mode` == "weighted") {
-  dmrs_weighted <- detect_dmrs_weighted(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`)
-  if (opt$`post-filter`) {
-    dmrs_weighted <- post_filter_dmrs(dmrs_weighted, win, opt$`min-median-p`, 
-                                      opt$`min-consistent-frac`, opt$`p-seed`)
-  }
-  dmrs_weighted <- add_delta_summary(dmrs_weighted, win)
-  fwrite(dmrs_weighted, sprintf("%s_dmrs_weighted.tsv", opt$`out-prefix`), sep = "\t")
-  write_bed(dmrs_weighted, sprintf("%s_dmrs_weighted.bed", opt$`out-prefix`))
 }
 
 message("[INFO] DMR analysis complete.")
