@@ -8,30 +8,28 @@ suppressPackageStartupMessages({
 # ---------- options ----------
 option_list <- list(
   make_option(c("-o","--out_dir"), type="character", default="results/site_window_sim",
-              help="出力ディレクトリ"),
+              help="Output directory"),
   make_option(c("--chr_len"), type="integer", default=5e6),
-  make_option(c("--site_lambda_CG"), type="double", default=4e4),
-  make_option(c("--site_lambda_CHG"), type="double", default=3e4),
-  make_option(c("--site_lambda_CHH"), type="double", default=2e4),
+  make_option(c("--site_lambda"), type="double", default=4e4,
+              help="Site density (lambda) for CG context"),
   make_option(c("--block_frac"), type="double", default=0.10),
   make_option(c("--block_len_lo"), type="integer", default=500),
   make_option(c("--block_len_hi"), type="integer", default=5000),
   make_option(c("--delta_grid"), type="character", default="0.1,0.2,0.3"),
   make_option(c("--groups"), type="character", default="WT,MT"),
   make_option(c("--rep_per_group"), type="integer", default=3),
-  make_option(c("--base_CG"), type="double", default=0.7),
-  make_option(c("--base_CHG"), type="double", default=0.3),
-  make_option(c("--base_CHH"), type="double", default=0.1),
+  make_option(c("--base"), type="double", default=0.7,
+              help="Base methylation rate for CG context"),
   make_option(c("--dmr_site_prop"), type="double", default=1.0,
-              help="各 DMR ブロックの中で本当にシフトするサイトの割合 (0〜1)"),
+              help="Proportion of sites within each DMR block that actually shift (0-1)"),
   make_option(c("--mu_site_sd"), type="double", default=0.0,
-              help="サイトごとの平均メチル化率 mu に加えるランダム効果のSD"),
-  make_option(c("--rho"), type="double", default=0.05, help="beta-binomialの過分散強さ（小さいほど強い）"),
-  make_option(c("--zeta_CHH"), type="double", default=0.40, help="CHH用のゼロ過剰率"),
+              help="SD of random effect added to per-site mean methylation rate mu"),
+  make_option(c("--rho"), type="double", default=0.05, help="Beta-binomial overdispersion strength (smaller = stronger)"),
+  make_option(c("--zeta_CHH"), type="double", default=0.40, help="Zero-inflation rate for CHH context"),
   make_option(c("--logcov_mu"), type="double", default=log(20)),
   make_option(c("--logcov_sd"), type="double", default=0.5),
-  make_option(c("--miss_rate"), type="double", default=0.10, help="siteを欠測にする確率"),
-  make_option(c("--min_cov"), type="integer", default=5, help="siteを有効とみなすカバレッジ閾値"),
+  make_option(c("--miss_rate"), type="double", default=0.10, help="Probability of missing data for each site"),
+  make_option(c("--min_cov"), type="integer", default=5, help="Coverage threshold for valid sites"),
   make_option(c("--seed"), type="integer", default=202509)
 )
 opt <- parse_args(OptionParser(option_list=option_list))
@@ -79,31 +77,31 @@ label_truth_sites <- function(site_dt, blocks_gr) {
   site_dt
 }
 
-# base rate / lambda per context
-site_lambda <- list(CG=opt$site_lambda_CG, CHG=opt$site_lambda_CHG, CHH=opt$site_lambda_CHH)
-base_rate   <- list(CG=opt$base_CG, CHG=opt$base_CHG, CHH=opt$base_CHH)
+# base rate / lambda for CG context
+site_lambda <- opt$site_lambda
+base_rate <- opt$base
 groups      <- strsplit(opt$groups, ",", fixed=TRUE)[[1]]
 groups      <- trimws(groups)
 ctx         <- "CG"
 
 if (length(groups) != 2L) {
-  stop("--groups は2群のみ指定してください (例: WT,MT)")
+  stop("--groups must specify exactly 2 groups (e.g., WT,MT)")
 }
 if (opt$dmr_site_prop < 0 || opt$dmr_site_prop > 1) {
-  stop("--dmr_site_prop は 0〜1 の範囲で指定してください")
+  stop("--dmr_site_prop must be between 0 and 1")
 }
 
-# DMR 周辺のノイズ抑制パラメータ
-near_buffer  <- 200   # DMR から ±200 bp を「周辺」とみなす
-near_factor  <- 0.2   # 周辺ではノイズを 0.2 倍にする
+# DMR peripheral noise suppression parameters
+near_buffer  <- 200   # Treat ±200 bp from DMR as "peripheral"
+near_factor  <- 0.2   # Reduce noise by 0.2x in peripheral regions
 
 # ---------- simulate ----------
 message("=== Simulating sites: ", ctx, " ===")
 delta_grid <- as.numeric(trimws(strsplit(opt$delta_grid, ",", fixed=TRUE)[[1]]))
 blocks <- simulate_blocks(opt$chr_len, opt$block_frac, opt$block_len_lo, opt$block_len_hi,
                           delta_grid)
-sites  <- simulate_sites(opt$chr_len, lambda_perMb = site_lambda[[ctx]])
-# サンプルデザイン
+sites  <- simulate_sites(opt$chr_len, lambda_perMb = site_lambda)
+# Sample design
 samples <- data.table(
   sample=sprintf("%s%02d", rep(groups, each=opt$rep_per_group),
                  sequence(rep(opt$rep_per_group, length(groups)))),
@@ -115,7 +113,7 @@ SS[, `:=`(chr=sites$chr[i], pos=sites$pos[i],
           sample=samples$sample[s], group=samples$group[s], replicate=samples$replicate[s])]
 SS[, context := ctx]
 
-# ブロック割り当て
+# Block assignment (DMR overlap)
 sg <- GRanges(SS$chr, IRanges(SS$pos, SS$pos))
 hit <- findOverlaps(sg, blocks, ignore.strand = TRUE)
 delta <- numeric(nrow(SS))
@@ -123,17 +121,27 @@ delta <- numeric(nrow(SS))
 if (length(hit)>0) {
   tb <- as.data.table(hit)
   qh <- tb$queryHits; sh <- tb$subjectHits
+  hit_delta <- mcols(blocks)$delta[sh]
 
-  # --- DMR 内でも一部のサイトだけシフト（aggregate モデルを不利にする）---
-  # 確率的にdeltaを適用（より効率的）
+  # --- Within DMR, only some sites shift (disadvantage for aggregate model) ---
+  # For sites overlapping multiple blocks, adopt delta with maximum absolute value
   if (opt$dmr_site_prop < 1) {
     eff_mask <- runif(length(qh)) < opt$dmr_site_prop
-    delta[qh[eff_mask]] <- mcols(blocks)$delta[sh[eff_mask]]
+    tb_eff <- tb[eff_mask]
+    if (nrow(tb_eff) > 0) {
+      tb_eff[, delta_val := hit_delta[eff_mask]]
+      # Select delta with maximum absolute value for sites overlapping multiple blocks
+      tb_eff <- tb_eff[, .(delta_val = delta_val[which.max(abs(delta_val))]), by = queryHits]
+      delta[tb_eff$queryHits] <- tb_eff$delta_val
+    }
   } else {
-    delta[qh] <- mcols(blocks)$delta[sh]
+    tb[, delta_val := hit_delta]
+    # Select delta with maximum absolute value for sites overlapping multiple blocks
+    tb <- tb[, .(delta_val = delta_val[which.max(abs(delta_val))]), by = queryHits]
+    delta[tb$queryHits] <- tb$delta_val
   }
 }
-## --- DMR 周辺サイトの判定（±near_buffer bp 拡張ブロックとのオーバーラップ）---
+## --- Classify peripheral DMR sites (overlap with ±near_buffer bp extended blocks) ---
 if (length(blocks) > 0L) {
   blocks_buf <- blocks
   start(blocks_buf) <- pmax(1L, start(blocks_buf) - near_buffer)
@@ -148,25 +156,25 @@ if (length(blocks) > 0L) {
 }
 noise_factor <- ifelse(is_near_dmr, near_factor, 1.0)
 
-# 例：各 replicate に対してランダムオフセットを付加
-rep_sd <- 0.01  # 1% 程度のゆらぎ（調整可能）
+# Example: Add random offset per replicate
+rep_sd <- 0.01  # ~1% fluctuation (tunable)
 rep_effect <- rnorm(opt$rep_per_group * length(groups), mean = 0, sd = rep_sd)
 names(rep_effect) <- unique(SS$sample)
 
-# DMR 周辺では replicate ノイズを弱める（明示的にmatch()で参照）
+# Weaken replicate noise in DMR periphery (explicit use of match())
 rep_effect_vec <- rep_effect[match(SS$sample, names(rep_effect))]
-mu <- base_rate[[ctx]] +
+mu <- base_rate +
   delta * (SS$group==groups[2]) +
   rep_effect_vec * noise_factor
 
-# --- サイト間ヘテロを入れる（Beta モデル有利ゾーンを作る）---
+# --- Add inter-site heterogeneity (create favorable zone for Beta model) ---
 if (opt$mu_site_sd > 0) {
   mu <- mu + rnorm(length(mu), mean = 0, sd = opt$mu_site_sd)
 }
 
 mu <- pmin(pmax(mu, 1e-4), 1-1e-4)
 
-# coverage & 欠測（レプリケートごとに異なるカバレッジ平均）
+# Coverage & missing data (different mean coverage per replicate)
 cov_rep_sd <- 0.1
 rep_cov_offset <- rnorm(length(unique(SS$sample)), 0, cov_rep_sd)
 names(rep_cov_offset) <- unique(SS$sample)
@@ -178,7 +186,7 @@ if (opt$miss_rate>0) cov[runif(length(cov)) < opt$miss_rate] <- 0L
 keep <- cov >= opt$min_cov
 SS <- SS[keep]; mu <- mu[keep]; cov <- cov[keep]; noise_factor <- noise_factor[keep]
 
-# 生成（CHHのみZI）
+# Generate methylation counts (zero-inflation for CHH only)
 use_zi <- identical(ctx,"CHH")
 meth <- unmeth <- rep(NA_integer_, nrow(SS))
 if (use_zi) {
@@ -187,10 +195,10 @@ if (use_zi) {
   unmeth[zi] <- cov[zi]
 }
 
-# rho を site ごとに振り、DMR 周辺ではさらに弱める
+# Vary rho per site, further reduce in DMR periphery
 rho_site <- rlnorm(nrow(SS), meanlog=log(opt$rho), sdlog=0.15)
-rho_site <- rho_site * noise_factor          # 周辺では小さく（= conc 大きく = ばらつき↓）
-rho_site <- pmax(rho_site, 1e-6)            # 安全のため下限
+rho_site <- rho_site * noise_factor          # Smaller in periphery (= larger conc = less spread)
+rho_site <- pmax(rho_site, 1e-6)            # Safety lower bound
 conc_site <- 1 / rho_site
 
 p_vec <- vapply(seq_along(mu),
@@ -205,7 +213,7 @@ if (any(sel)) {
 
 DT <- data.table(chr=SS$chr, pos=SS$pos, sample=SS$sample, group=SS$group,
                  replicate=SS$replicate, context=ctx, meth=meth, unmeth=unmeth)
-# truth(site)
+# Ground truth (sites)
 DT_truth <- unique(DT[, .(chr,pos)])
 DT_truth <- label_truth_sites(DT_truth, blocks)
 setkey(DT, chr, pos, sample); setkey(DT_truth, chr, pos)
@@ -215,4 +223,4 @@ setorder(DT, chr, pos, group, sample)
 fwrite(DT, file.path(opt$out_dir, "tsv", sprintf("sites_%s.tsv.gz", ctx)), sep="\t")
 fwrite(gr_to_dt(blocks), file.path(opt$out_dir, "tsv", sprintf("truth_blocks_%s.tsv.gz", ctx)), sep="\t")
 fwrite(unique(DT_truth[,.(chr,pos,truth,dir)]), file.path(opt$out_dir, "tsv", sprintf("truth_sites_%s.tsv.gz", ctx)), sep="\t")
-message("Done: 01_simulate_sites_noize.R")
+message("[INFO] Simulation complete: simulate_sites.R")
