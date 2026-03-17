@@ -24,10 +24,10 @@ def main():
     parser = argparse.ArgumentParser(description="Binomial test for methylation sites with FDR correction")
     parser.add_argument("-i", "--input", required=True, help="Input summarized file (tsv.gz)")
     parser.add_argument("-o", "--output", required=True, help="Output filtered file (tsv.gz)")
-    parser.add_argument("--null_prob", type=float, default=None, help="Null hypothesis probability (default: estimated from nonconv_chr or 0.5)")
+    parser.add_argument("--null_prob", type=float, default=None, help="Null hypothesis probability (use precomputed value when nonconv_chr is unavailable; default: estimated from nonconv_chr or 0.5)")
     parser.add_argument("--fdr_threshold", type=float, default=0.05, help="FDR threshold (default: 0.05)")
     parser.add_argument("--min_coverage", type=int, default=0, help="Minimum coverage to retain site (default: 0)")
-    parser.add_argument("--nonconv_chr", type=str, default=None, help="Non-conversion control chromosome (optional, e.g., 'chloroplast')")
+    parser.add_argument("--nonconv_chr", type=str, default=None, help="Non-conversion control chromosome (recommended when available, e.g., 'chloroplast')")
     parser.add_argument("--threads", type=int, default=4, help="Number of threads (default: 4)")
     args = parser.parse_args()
 
