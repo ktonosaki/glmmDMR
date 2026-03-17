@@ -74,7 +74,7 @@ Rscript DMR_merge.R --help
 
 ## 4. Typical Workflow
 
-1. Upstream methylation extraction (Bismark).
+1. Upstream methylation extraction (alignment and base call by Bismark).
 2. Summarize extractor output per sample.
 3. Run per-site binomial filtering.
 4. Build two-group sliding-window matrix.
