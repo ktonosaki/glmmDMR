@@ -1,5 +1,4 @@
-<>
-<img width="469" height="98" alt="glmmDMR_logo" src=glmmDMR_logo.png />
+<img width="500" height="100" alt="glmmDMR_logo" src=glmmDMR_logo.png />
 
 
 ## glmmDMR
