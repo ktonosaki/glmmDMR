@@ -95,9 +95,8 @@ Input:
 
 Output:
 
-| File | Key columns |
-| --- | --- |
-| `*_summarized_output.tsv.gz` | `chr, pos, strand, meth, unmeth, context` |
+- `*_summarized_output.tsv.gz`
+- Key columns: `chr, pos, strand, meth, unmeth, context`
 
 Example:
 
@@ -116,9 +115,7 @@ Input:
 
 Output:
 
-| File | Description |
-| --- | --- |
-| `*_binomtest_result.tsv.gz` | Site-level test result table (`chr, pos, strand, meth, unmeth, context`) |
+- `*_binomtest_result.tsv.gz`
 
 Behavior note:
 
@@ -162,9 +159,7 @@ Input:
 
 Output:
 
-| File pattern | Description |
-| --- | --- |
-| `<g1>_<g2>_<ctx>_matrix.tsv.gz` | Sliding-window matrix file |
+- Sliding-window matrix TSV.GZ files
 
 Example:
 
@@ -187,9 +182,7 @@ Input:
 
 Output:
 
-| File pattern | Description |
-| --- | --- |
-| `*_fit_<family>_<mode>.tsv.gz` | Window-level GLMM result table |
+- `*_fit_<family>_<mode>.tsv.gz`
 
 Key options:
 
@@ -220,10 +213,7 @@ Input:
 
 Output:
 
-| File pattern | Description |
-| --- | --- |
-| `*_dmrs_<mode>.tsv` | DMR table output |
-| `*_dmrs_<mode>.bed` | BED interval output |
+- DMR TSV files and BED files
 
 Supported merge modes:
 
@@ -301,10 +291,7 @@ Rscript DMR_merge.R \
 
 Output:
 
-| File | Description |
-| --- | --- |
-| `sample_CpG.bw` | Binned methylation bigWig |
-| `group_CpG.variance.bw` | Binned variance bigWig |
+- Binned methylation and variance bigWig files
 
 Methylation bigWig:
 
