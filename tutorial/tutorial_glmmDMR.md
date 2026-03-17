@@ -3,58 +3,67 @@
 このドキュメントは、glmmDMR の各スクリプトで実行している処理内容、主要オプション、入出力ファイル形式を実務向けに整理した詳細リファレンスです。
 
 対象スクリプト:
-- summarize_extractor.py
-- BinomTest.py
-- prepare_matrix.sh
-- run_glmmDMR.R
-- DMR_merge.R
-- make_binned_methylation_bigwig.R (optional)
-- make_binned_variance_bigwig.R (optional; Python script)
+- `summarize_extractor.py`
+- `BinomTest.py`
+- `prepare_matrix.sh`
+- `run_glmmDMR.R`
+- `DMR_merge.R`
+- `make_binned_methylation_bigwig.R` (optional)
+- `make_binned_variance_bigwig.R` (optional; Python script)
 
 ## 1. Pipeline Summary
 
 標準フロー:
 1. 上流で Bismark による methylation extraction を実行
-2. summarize_extractor.py で site 集計
-3. BinomTest.py で site フィルタ
-4. prepare_matrix.sh で window matrix 生成
-5. run_glmmDMR.R で window-level GLMM 推定
-6. DMR_merge.R で DMR 統合
+2. `summarize_extractor.py` で site 集計
+3. `BinomTest.py` で site フィルタ
+4. `prepare_matrix.sh` で window matrix 生成
+5. `run_glmmDMR.R` で window-level GLMM 推定
+6. `DMR_merge.R` で DMR 統合
 7. 必要に応じて bigWig 可視化
 
-## 2. Prerequisites
+## 2. Upstream analysis example (before glmmDMR)
 
-Python:
-- pandas
-- numpy
-- scipy
-- statsmodels
-- pyBigWig
-- tqdm
+以下は、`glmmDMR` に入力する前段でよく使う Bismark ベースの最小例です。
 
-R:
-- optparse
-- data.table
-- glmmTMB
-- future
-- future.apply
-- GenomicRanges
-- rtracklayer
-
-CLI:
-- bedtools
-- samtools
-- zcat / gzip
-
-推奨:
 ```bash
-export TMPDIR=/path/to/large_storage/tmp
-mkdir -p "$TMPDIR"
+bismark \
+  --bowtie2 \
+  -p ${core} \
+  -o ${out} \
+  ${ref} \
+  -1 ${read}/${fa}_1.trimed.fq.gz \
+  -2 ${read}/${fa}_2.trimed.fq.gz
+
+samtools view -@ ${core} -q 42 -b ${out}/${fa}_1.trimed_bismark_bt2_pe.bam | \
+  samtools sort -n -@ ${core} -o ${out}/${fa}.Q42.bam
+
+mkdir -p ${call}/${fa}
+
+# PCR deduplication
+deduplicate_bismark \
+  --paired \
+  --output_dir ${out} \
+  --bam \
+  ${out}/${fa}.Q42.bam
+
+# Call methylC
+bismark_methylation_extractor \
+  --paired-end \
+  --output ${call}/${fa} \
+  --parallel ${core} \
+  --buffer_size 30% \
+  --gzip \
+  --genome_folder ${ref} \
+  ${out}/${fa}.Q42.deduplicated.bam
 ```
+
+この出力（`CpG_*.txt.gz`, `CHG_*.txt.gz`, `CHH_*.txt.gz`）を、次節の `summarize_extractor.py` に入力します。
+
 
 ## 3. Script-by-Script Details
 
-## 3.1 summarize_extractor.py
+## 3.1 `summarize_extractor.py`
 
 Purpose:
 - Bismark extractor 出力 (`*.txt.gz`) を context 横断で統合し、site 単位の集計表へ変換。
@@ -92,7 +101,7 @@ python summarize_extractor.py \
   --threads 4
 ```
 
-## 3.2 BinomTest.py
+## 3.2 `BinomTest.py`
 
 Purpose:
 - site 単位で binomial test + BH-FDR 補正を行い、低信頼シグナルを抑制。
@@ -137,7 +146,7 @@ python BinomTest.py \
   --threads 4
 ```
 
-## 3.3 prepare_matrix.sh
+## 3.3 `prepare_matrix.sh`
 
 Purpose:
 - 2群比較用の sliding-window matrix を context 別に生成。
@@ -178,7 +187,7 @@ bash prepare_matrix.sh \
   --output prep_out
 ```
 
-## 3.4 run_glmmDMR.R
+## 3.4 `run_glmmDMR.R`
 
 Purpose:
 - window 単位で GLMM を当てて p 値、delta、要約統計を推定。
@@ -239,7 +248,7 @@ Rscript run_glmmDMR.R \
   --workers 8 --batches 200 --max_globals_mb 2000
 ```
 
-## 3.5 DMR_merge.R
+## 3.5 `DMR_merge.R`
 
 Purpose:
 - window-level 有意シグナルを統合して DMR を構築。
@@ -295,7 +304,7 @@ Rscript DMR_merge.R \
   --min-windows 1
 ```
 
-## 3.6 make_binned_methylation_bigwig.R (optional)
+## 3.6 `make_binned_methylation_bigwig.R` (optional)
 
 Purpose:
 - site methylation から bin ごとの平均 methylation を bigWig 化。
@@ -329,7 +338,7 @@ Rscript make_binned_methylation_bigwig.R \
   --context CpG
 ```
 
-## 3.7 make_binned_variance_bigwig.R (optional)
+## 3.7 `make_binned_variance_bigwig.R` (optional)
 
 Purpose:
 - 複数 bigWig の bin 平均値から replicate 間分散を計算して bigWig 化。
@@ -365,21 +374,8 @@ python make_binned_variance_bigwig.R \
   --norm none
 ```
 
-## 4. Recommended Presets
 
-Small replicate design (2 vs 2):
-- run_glmmDMR.R:
-  - `--family beta --mode aggregate --min_reps_g1 2 --min_reps_g2 2 --min_sites_win 1 --min_cov 5`
-- DMR_merge.R:
-  - `--merge-mode hybrid_seed --p-seed 0.05 --p-extend 0.05 --min-windows 1`
-
-Mid replicate design (4 vs 4):
-- run_glmmDMR.R:
-  - `--family beta --mode aggregate --min_reps_g1 4 --min_reps_g2 4`
-- DMR_merge.R:
-  - `--merge-mode multi_seed` or `--merge-mode hybrid_seed`
-
-## 5. Troubleshooting
+## 4. Troubleshooting
 
 1) No windows after filtering
 - 原因: `--min_cov`, `--min_sites_win`, replicate 条件が厳しすぎる
@@ -391,13 +387,3 @@ Mid replicate design (4 vs 4):
 3) bigWig 生成で chromosome mismatch
 - 原因: 入力 chr 名と chrom.sizes の不一致
 - 対応: naming を統一して再実行
-
-4) DMR が細切れ
-- 対応: `--max-gap-bp` を拡大し、`--p-extend`, `--min-delta`, `--merge-mode` を調整
-
-## 6. Reproducibility Checklist
-
-- 参照ゲノムと chrom.sizes のバージョン固定
-- 乱数 seed 固定 (`run_glmmDMR.R --seed`)
-- 依存パッケージのバージョン記録
-- 実行コマンドとログ保存
