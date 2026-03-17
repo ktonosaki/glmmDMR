@@ -57,9 +57,7 @@ option_list <- list(
   make_option(c("--min-consistent-frac"), type = "numeric", default = 0.5,
               help = "Minimum fraction of windows with p <= p-seed (post-filter) [default %default]"),
 
-  # --- Edge / length / median-p filters ---
-  make_option(c("--trim-weak-edges"), action = "store_true", default = FALSE,
-              help = "Trim weak windows (p > p-extend) from DMR edges [default %default]"),
+  # --- Length / median-p filters ---
   make_option(c("--min-dmr-length"), type = "integer", default = 0,
               help = "Minimum DMR length in bp (0=no filter) [default %default]"),
   make_option(c("--max-median-p"), type = "numeric", default = 1.0,
@@ -159,39 +157,6 @@ calculate_adaptive_delta_threshold <- function(dmrs, win, method = "median_ratio
   message(sprintf("[INFO] Adaptive delta threshold: %.4f (method=%s, median=%.4f, Q25=%.4f, Q10=%.4f)",
                   threshold, method, median_delta, q25_delta, q10_delta))
   max(0, threshold)
-}
-
-trim_dmr_edges <- function(dmrs, win, p_extend) {
-  if (nrow(dmrs) == 0) return(dmrs)
-  message("[INFO] Trimming weak edges (p > ", p_extend, ")")
-
-  trimmed <- lapply(seq_len(nrow(dmrs)), function(i) {
-    row <- dmrs[i, ]
-    overlapping_windows <- win[chr == row$chr & direction == row$direction &
-                                 start >= row$start & end <= row$end][order(start)]
-    if (nrow(overlapping_windows) == 0) return(NULL)
-
-    start_idx <- 1
-    while (start_idx <= nrow(overlapping_windows) && overlapping_windows$p[start_idx] > p_extend) {
-      start_idx <- start_idx + 1
-    }
-
-    end_idx <- nrow(overlapping_windows)
-    while (end_idx >= start_idx && overlapping_windows$p[end_idx] > p_extend) {
-      end_idx <- end_idx - 1
-    }
-
-    if (start_idx > end_idx) return(NULL)
-    kept <- overlapping_windows[start_idx:end_idx]
-    row$start <- min(kept$start)
-    row$end <- max(kept$end)
-    row$n_windows <- nrow(kept)
-    row
-  })
-
-  out <- safe_rbindlist(trimmed[!sapply(trimmed, is.null)])
-  message("[INFO] Trimmed: ", nrow(dmrs), " -> ", nrow(out), " DMRs")
-  out
 }
 
 post_filter_dmrs <- function(dmrs, win, min_median_p, min_consistent_frac, p_seed) {
@@ -535,7 +500,6 @@ if (opt$`merge-mode` == "multi_seed") {
                                             seed_min_windows = opt$`seed-min-windows`)
   }
 
-  if (opt$`trim-weak-edges`) dmrs <- trim_dmr_edges(dmrs, win, opt$`p-extend`)
   if (opt$`min-dmr-length` > 0) dmrs <- dmrs[end - start >= opt$`min-dmr-length`, ]
 
   if (opt$`max-median-p` < 1.0 && nrow(dmrs) > 0) {
@@ -572,7 +536,6 @@ if (opt$`merge-mode` == "multi_seed") {
                                     seed_min_windows = opt$`seed-min-windows`)
   }
 
-  if (opt$`trim-weak-edges`) dmrs <- trim_dmr_edges(dmrs, win, opt$`p-extend`)
   if (opt$`min-dmr-length` > 0) dmrs <- dmrs[end - start >= opt$`min-dmr-length`, ]
 
   if (opt$`max-median-p` < 1.0 && nrow(dmrs) > 0) {
@@ -606,7 +569,6 @@ if (opt$`merge-mode` == "multi_seed") {
                                     opt$`min-delta`, opt$`max-p-degradation`, opt$`max-final-p`, opt$`min-strong-windows`)
   }
 
-  if (opt$`trim-weak-edges`) dmrs <- trim_dmr_edges(dmrs, win, opt$`p-extend`)
   if (opt$`min-dmr-length` > 0) dmrs <- dmrs[end - start >= opt$`min-dmr-length`, ]
 
   if (opt$`max-median-p` < 1.0 && nrow(dmrs) > 0) {
