@@ -2,6 +2,9 @@
 
 glmmDMR is a small pipeline collection for DNA methylation analysis with window-level GLMM and DMR integration.
 
+
+Bismark["https://felixkrueger.github.io/Bismark/"]
+
 This repository contains scripts for:
 - methylation extraction summarization
 - site-level binomial filtering
@@ -12,26 +15,26 @@ This repository contains scripts for:
 
 ## Repository scripts
 
-- summarize_extractor.py
+- `summarize_extractor.py`
   Summarize Bismark methylation extractor output (*.txt.gz) to per-site counts.
-- BinomTest.py
+- `BinomTest.py`
   Per-site binomial test + FDR correction.
-- prepare_matrix.sh
+- `prepare_matrix.sh`
   Build sliding-window matrix from two groups of samples.
-- run_glmmDMR.R
+- `run_glmmDMR.R`
   Fit GLMM per window (binomial/beta, aggregate/site mode).
-- DMR_merge.R
+- `DMR_merge.R`
   Integrate significant windows into DMRs with multiple strategies.
-- make_binned_methylation_bigwig.R
+- `make_binned_methylation_bigwig.R` (optional)
   Generate binned methylation bigWig.
-- make_binned_variance_bigwig.R
+- `make_binned_variance_bigwig.R` (optional)
   Generate binned variance bigWig from multiple bigWigs.
-- simulate_site_data.R
+- `simulate_site_data.R` (optional)
   Simulate site-level methylation data for benchmarking.
 
 ## Install glmmDMR
 
-Detailed step-by-step guide is available in tutorial_glmmDMR.md.
+Detailed step-by-step guide is available in `tutorial_glmmDMR.md`.
 
 ### Clone repository
 
@@ -78,8 +81,9 @@ Core tools used across scripts:
 - CLI tools: bedtools, samtools, zcat
 
 Recommended additional tools for upstream processing:
-- fastp (read QC / trimming)
-- SRA Toolkit (fasterq-dump)
+- gzip
+- bedtools 
+- samtools 
 - Bismark (+ bowtie2) for alignment and methylation extraction
 - deepTools (e.g. bigwigAverage in replicate summaries)
 
@@ -125,8 +129,7 @@ You may also need Bismark/Fastp/SRA Toolkit depending on your upstream preproces
 
 The full workflow is based on the processing order used in 02.publis_data.sh:
 
-1. Download and preprocess reads
-   (for example: fasterq-dump, fastp, alignment and methylation extraction by Bismark)
+1. preprocess reads (alignment and methylation extraction by Bismark)
 2. Summarize methylation calls per sample
 3. Run per-site binomial test
 4. Convert to binned bigWig (optional)
@@ -151,14 +154,7 @@ Expected output:
 Example (paired-end, minimal flow):
 
 ```bash
-# 1) Download FASTQ from SRA
-fasterq-dump SRRXXXXXXX --split-files --threads 8 --outdir raw
-
-# 2) Compress FASTQ
-pigz -p 8 raw/SRRXXXXXXX_1.fastq
-pigz -p 8 raw/SRRXXXXXXX_2.fastq
-
-# 3) Trim reads
+# 1) Trim reads
 fastp \
   -i raw/SRRXXXXXXX_1.fastq.gz \
   -I raw/SRRXXXXXXX_2.fastq.gz \
@@ -166,13 +162,20 @@ fastp \
   -O clean/sample_2.trimmed.fq.gz \
   --thread 8
 
-# 4) Align with Bismark (bowtie2)
+# 2) Align with Bismark (bowtie2)
 bismark --bowtie2 -p 8 -o align /path/to/bismark_genome \
   -1 clean/sample_1.trimmed.fq.gz \
   -2 clean/sample_2.trimmed.fq.gz
 
-# 5) Deduplicate and extract methylation calls
+# 3) Align with Bismark (bowtie2)
+samtools view -@ ${core} -q 42 -b ${out}/${fa}.trimed_bismark_bt2.bam | \
+        samtools sort -n -@ ${core} -o ${out}/${fa}.Q42.bam
+
+
+# 3) Deduplicate and extract methylation calls
 deduplicate_bismark --paired --output_dir align --bam align/sample_bismark_bt2_pe.bam
+
+# 5) Deduplicate and extract methylation calls
 bismark_methylation_extractor --paired-end --gzip --parallel 8 \
   --genome_folder /path/to/bismark_genome \
   --output calls/sample \
