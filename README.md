@@ -1,49 +1,43 @@
-<img width="688" height="192" alt="image" src="https://github.com/user-attachments/assets/69e3cb66-97c3-4ea0-9b10-f512209b0fef" />
+# glmmDMR Tutorial
 
-glmmDMR is a small pipeline collection for DNA methylation analysis with window-level GLMM and DMR integration.
+## Concept
 
+A sliding-window strategy was used to partition DNA methylation data into fixed-size windows, and a generalized linear mixed model (GLMM) was applied with methylated cytosine counts in each window as the response variable. By modeling the comparison target as a fixed effect while accounting for biological replicates, the framework estimates window-level methylation differences and statistical significance while incorporating between-replicate variability. In addition, to construct DMRs from windows judged significant, two integration methods were implemented: (i) a Multi-seed approach that statistically combines multiple adjacent moderate signals, and (ii) a Single-seed approach that starts from a strongly significant single window and expands the region.
 
-Bismark["https://felixkrueger.github.io/Bismark/"]
+glmmDMR is a lightweight script collection for DNA methylation analysis using window-level GLMM and DMR integration.
 
-This repository contains scripts for:
-- methylation extraction summarization
-- site-level binomial filtering
-- window matrix construction
-- GLMM fitting
-- DMR integration (multiple merge strategies)
-- bigWig generation (mean and variance)
+This README is a practical guide: setup, end-to-end workflow, key options, and expected outputs.
 
-## Repository scripts
+## 1. Repository Contents
 
-- `summarize_extractor.py`
-  Summarize Bismark methylation extractor output (*.txt.gz) to per-site counts.
-- `BinomTest.py`
-  Per-site binomial test + FDR correction.
-- `prepare_matrix.sh`
-  Build sliding-window matrix from two groups of samples.
-- `run_glmmDMR.R`
-  Fit GLMM per window (binomial/beta, aggregate/site mode).
-- `DMR_merge.R`
-  Integrate significant windows into DMRs with multiple strategies.
-- `make_binned_methylation_bigwig.R` (optional)
-  Generate binned methylation bigWig.
-- `make_binned_variance_bigwig.R` (optional)
-  Generate binned variance bigWig from multiple bigWigs.
-- `simulate_site_data.R` (optional)
-  Simulate site-level methylation data for benchmarking.
+Core scripts:
 
-## Install glmmDMR
+- summarize_extractor.py: summarize Bismark extractor output (`*.txt.gz`) into per-site counts.
+- BinomTest.py: per-site binomial test with FDR-based filtering behavior.
+- prepare_matrix.sh: build two-group sliding-window matrices.
+- run_glmmDMR.R: fit GLMM per window (`binom`/`beta`, `aggregate`/`site`).
+- DMR_merge.R: merge significant windows into DMRs.
+  - Supported `--merge-mode`: `Simes`, `Stouffer`, `single_seed`, `multi_seed`, `hybrid_seed`.
+- make_binned_methylation_bigwig.R (optional): generate binned methylation bigWig.
+- make_binned_variance_bigwig.R (optional): generate binned variance bigWig.
 
-Detailed step-by-step guide is available in `tutorial_glmmDMR.md`.
+Simulation resources:
 
-### Clone repository
+- simulation/simulate_sites.R
+- simulation/README.md
+
+Detailed method tutorial:
+
+- tutorial/tutorial_glmmDMR.md
+
+## 2. Installation
 
 ```bash
 git clone https://github.com/ktonosaki/glmmDMR.git
 cd glmmDMR
 ```
 
-### Make scripts executable (optional)
+Optional executable flags:
 
 ```bash
 chmod +x summarize_extractor.py BinomTest.py prepare_matrix.sh
@@ -51,49 +45,13 @@ chmod +x run_glmmDMR.R DMR_merge.R
 chmod +x make_binned_methylation_bigwig.R make_binned_variance_bigwig.R
 ```
 
-### Quick check
-
-```bash
-python summarize_extractor.py --help
-python BinomTest.py --help
-Rscript run_glmmDMR.R --help
-Rscript DMR_merge.R --help
-```
-
-### Run without installation
-
-You can run scripts directly from the cloned repository (no package build required):
-
-```bash
-git clone https://github.com/ktonosaki/glmmDMR.git
-cd glmmDMR
-python summarize_extractor.py --help
-Rscript run_glmmDMR.R --help
-```
-
-
-
-## Dependencies
-
-Core tools used across scripts:
-- Python: pandas, numpy, scipy, statsmodels, pyBigWig, tqdm
-- R: optparse, data.table, glmmTMB, future, future.apply, GenomicRanges, rtracklayer
-- CLI tools: bedtools, samtools, zcat
-
-Recommended additional tools for upstream processing:
-- gzip
-- bedtools 
-- samtools 
-- Bismark (+ bowtie2) for alignment and methylation extraction
-- deepTools (e.g. bigwigAverage in replicate summaries)
-
-### Install Python packages
+Python dependencies:
 
 ```bash
 python -m pip install pandas numpy scipy statsmodels pyBigWig tqdm
 ```
 
-### Install R packages
+R dependencies:
 
 ```r
 install.packages(c("optparse", "data.table", "glmmTMB", "future", "future.apply"))
@@ -101,224 +59,14 @@ if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocMana
 BiocManager::install(c("GenomicRanges", "rtracklayer"))
 ```
 
-### Install CLI tools (example)
+Recommended CLI tools:
 
-```bash
-# macOS (Homebrew)
-brew install bedtools samtools gzip
+- bedtools
+- samtools
+- gzip / zcat
+- Bismark (+ bowtie2) for upstream methylation extraction
 
-# Ubuntu/Debian
-sudo apt-get update
-sudo apt-get install -y bedtools samtools gzip
-```
-
-### Temporary directory setting (recommended)
-
-Large datasets can generate large temporary files. Set TMPDIR to a high-capacity location:
-
-```bash
-export TMPDIR=/path/to/large_storage/tmp
-mkdir -p "$TMPDIR"
-```
-
-To persist this setting, add it to your shell startup file (for example `~/.bashrc` or `~/.zshrc`).
-
-You may also need Bismark/Fastp/SRA Toolkit depending on your upstream preprocessing.
-
-## Typical workflow
-
-The full workflow is based on the processing order used in 02.publis_data.sh:
-
-1. preprocess reads (alignment and methylation extraction by Bismark)
-2. Summarize methylation calls per sample
-3. Run per-site binomial test
-4. Convert to binned bigWig (optional)
-5. Build group-wise sliding-window matrix
-6. Run GLMM (run_glmmDMR.R)
-7. Merge windows into DMRs (DMR_merge.R)
-8. Compare with other methods / annotate genomic contexts (optional)
-
-### Step 1: Download and preprocess reads
-
-Goal: Generate high-quality alignment-ready FASTQ and methylation call files.
-
-What is usually done:
-- Download FASTQ files (for example with SRA Toolkit `fasterq-dump`).
-- Perform read QC/trimming (for example with `fastp`).
-- Align reads to the reference genome (typically Bismark + bowtie2).
-- Remove PCR duplicates and run methylation extractor.
-
-Expected output:
-- Sample-wise Bismark extractor outputs (`*.txt.gz`) for each context/strand.
-
-Example (paired-end, minimal flow):
-
-```bash
-# 1) Trim reads
-fastp \
-  -i raw/SRRXXXXXXX_1.fastq.gz \
-  -I raw/SRRXXXXXXX_2.fastq.gz \
-  -o clean/sample_1.trimmed.fq.gz \
-  -O clean/sample_2.trimmed.fq.gz \
-  --thread 8
-
-# 2) Align with Bismark (bowtie2)
-bismark --bowtie2 -p 8 -o align /path/to/bismark_genome \
-  -1 clean/sample_1.trimmed.fq.gz \
-  -2 clean/sample_2.trimmed.fq.gz
-
-# 3) Align with Bismark (bowtie2)
-samtools view -@ ${core} -q 42 -b ${out}/${fa}.trimed_bismark_bt2.bam | \
-        samtools sort -n -@ ${core} -o ${out}/${fa}.Q42.bam
-
-
-# 3) Deduplicate and extract methylation calls
-deduplicate_bismark --paired --output_dir align --bam align/sample_bismark_bt2_pe.bam
-
-# 5) Deduplicate and extract methylation calls
-bismark_methylation_extractor --paired-end --gzip --parallel 8 \
-  --genome_folder /path/to/bismark_genome \
-  --output calls/sample \
-  align/sample_bismark_bt2_pe.deduplicated.bam
-```
-
-### Step 2: Summarize methylation calls per sample
-
-Goal: Convert extractor outputs into a compact per-site methylation table.
-
-Script:
-- `summarize_extractor.py`
-
-Input:
-- One sample extractor directory containing context files.
-
-Output:
-- `*_summarized_output.tsv.gz` with columns:
-  `chr, pos, strand, meth, unmeth, context`.
-
-Why this step matters:
-- Standardizes output format for downstream filtering and matrix building.
-
-### Step 3: Run per-site binomial test
-
-Goal: Reduce likely non-informative methylation signal before window-level modeling.
-
-Script:
-- `BinomTest.py`
-
-Input:
-- `*_summarized_output.tsv.gz`.
-
-Output:
-- `*_binomtest_result.tsv.gz` with the same core columns.
-
-Behavior note:
-- Sites above the FDR threshold are retained but `meth` is set to 0.
-
-### Step 4: Convert to binned bigWig (optional)
-
-Goal: Create genome-browser tracks for quick visualization/QC.
-
-Scripts:
-- `make_binned_methylation_bigwig.R` (mean methylation per bin)
-- `make_binned_variance_bigwig.R` (replicate variance per bin)
-
-Input:
-- Binomial-filtered TSVs and/or per-sample bigWig files.
-
-Output:
-- Context-specific bigWig tracks (`*.bw`).
-
-### Step 5: Build group-wise sliding-window matrix
-
-Goal: Convert site-level tables into the window matrix used by GLMM.
-
-Script:
-- `prepare_matrix.sh`
-
-Input:
-- Group1 and Group2 sets of `*_binomtest_result.tsv.gz`.
-- Reference FASTA or FAI for window generation.
-
-Output:
-- Context-specific matrix files (`*_matrix.tsv.gz`) for each comparison.
-
-Key controls:
-- `--window`, `--slide` (resolution/smoothing tradeoff).
-- Group labels used by downstream models.
-
-### Step 6: Run GLMM (run_glmmDMR.R)
-
-Goal: Fit window-level statistical models and estimate group differences.
-
-Script:
-- `run_glmmDMR.R`
-
-Input:
-- Matrix file from Step 5.
-
-Output:
-- Per-window fit table: `*_fit_<family>_<mode>.tsv.gz`.
-
-Important options:
-- `--family` (`binom` or `beta`)
-- `--mode` (`aggregate` or `site`)
-- replicate filters (`--min_reps_g1`, `--min_reps_g2`)
-- parallelization (`--workers`, `--batches`)
-
-### Step 7: Merge windows into DMRs (DMR_merge.R)
-
-Goal: Integrate significant windows into biologically interpretable DMRs.
-
-Script:
-- `DMR_merge.R`
-
-Input:
-- GLMM fit output with required columns `chr,start,end,p,delta`.
-
-Output:
-- DMR tables and BED files (depending on merge mode/options).
-
-Common strategy parameters:
-- `--merge-mode` (for example `single_seed`, `stouffer_multi_seed`, `hybrid_seed`)
-- `--p-seed`, `--p-extend`, `--min-windows`
-- optional post-filtering / overlap merge flags.
-
-### Step 8: Compare with other methods / genomic annotation (optional)
-
-Goal: Benchmark glmmDMR calls and interpret genomic context.
-
-Typical analyses:
-- Compare against DSS / methylKit / DMRfinder outputs.
-- Intersect DMR BED files with promoter, gene body, TE, and intergenic annotations.
-- Summarize overlap counts and context-specific enrichment patterns.
-
-## Input and output format
-
-### summarize_extractor.py
-- Input: Bismark extractor directory containing `*.txt.gz`
-- Output: gzipped TSV with columns `chr, pos, strand, meth, unmeth, context`
-
-### BinomTest.py
-- Input: summarized TSV.gz from summarize_extractor.py
-- Output: filtered TSV.gz with the same core columns
-- Behavior: non-significant sites are retained with `meth=0` for weighted-level downstream usage
-
-### prepare_matrix.sh
-- Input: two groups of `*_binomtest_result.tsv.gz` and reference FASTA/FAI
-- Output: context-specific sliding-window matrix files in TSV.gz
-
-### run_glmmDMR.R
-- Input: window matrix TSV.gz
-- Output: per-window fit table `*_fit_<family>_<mode>.tsv.gz`
-
-### DMR_merge.R
-- Input: GLMM result table with required columns `chr,start,end,p,delta`
-- Output: merged DMR tables (and BED files depending on mode/options)
-
-## Quick test
-
-Run help commands first to verify runtime dependencies and script entry points:
+## 3. Quick Environment Check
 
 ```bash
 python summarize_extractor.py --help
@@ -328,9 +76,30 @@ Rscript run_glmmDMR.R --help
 Rscript DMR_merge.R --help
 ```
 
-## Minimal examples
+## 4. Typical Workflow
 
-### 1) Summarize extractor output
+1. Upstream methylation extraction (Bismark).
+2. Summarize extractor output per sample.
+3. Run per-site binomial filtering.
+4. Build two-group sliding-window matrix.
+5. Run GLMM per window.
+6. Merge windows into DMRs.
+7. Optionally generate bigWig tracks.
+
+## 5. Step-by-Step Inputs and Outputs
+
+### Step 1: summarize_extractor.py
+
+Input:
+
+- Bismark extractor output files (`*.txt.gz`) for one sample.
+
+Output:
+
+- `*_summarized_output.tsv.gz`
+- Key columns: `chr, pos, strand, meth, unmeth, context`
+
+Example:
 
 ```bash
 python summarize_extractor.py \
@@ -339,7 +108,21 @@ python summarize_extractor.py \
   --threads 4
 ```
 
-### 2) Binomial test
+### Step 2: BinomTest.py
+
+Input:
+
+- `*_summarized_output.tsv.gz`
+
+Output:
+
+- `*_binomtest_result.tsv.gz`
+
+Behavior note:
+
+- Non-significant sites are retained, but `meth` is set to `0` for downstream usage.
+
+Example:
 
 ```bash
 python BinomTest.py \
@@ -351,7 +134,18 @@ python BinomTest.py \
   --threads 4
 ```
 
-### 3) Prepare matrix for two groups
+### Step 3: prepare_matrix.sh
+
+Input:
+
+- Group1 and Group2 sets of `*_binomtest_result.tsv.gz`
+- Reference FASTA/FAI
+
+Output:
+
+- Sliding-window matrix TSV.GZ files
+
+Example:
 
 ```bash
 bash prepare_matrix.sh \
@@ -364,7 +158,23 @@ bash prepare_matrix.sh \
   --output prep_out
 ```
 
-### 4) Run GLMM
+### Step 4: run_glmmDMR.R
+
+Input:
+
+- Window matrix TSV.GZ
+
+Output:
+
+- `*_fit_<family>_<mode>.tsv.gz`
+
+Key options:
+
+- `--family`: `binom` or `beta`
+- `--mode`: `aggregate` or `site`
+- `--workers`, `--batches`
+
+Example:
 
 ```bash
 Rscript run_glmmDMR.R \
@@ -379,19 +189,34 @@ Rscript run_glmmDMR.R \
   --workers 8 --batches 200
 ```
 
-### 5) Merge DMRs
+### Step 5: DMR_merge.R
+
+Input:
+
+- GLMM fit table with required columns: `chr, start, end, p, delta`
+
+Output:
+
+- DMR TSV files and BED files
+
+Key options:
+
+- `--merge-mode`: `Simes`, `Stouffer`, `single_seed`, `multi_seed`, `hybrid_seed`
+- `--p-seed`, `--p-extend`, `--min-windows`
+
+Example:
 
 ```bash
 Rscript DMR_merge.R \
   --windows glmm_out/WT_MT_CpG_fit_beta_aggregate.tsv.gz \
   --out-prefix dmr_out/WT_MT_CpG \
-  --merge-mode stouffer_multi_seed \
+  --merge-mode hybrid_seed \
   --p-seed 0.05 \
   --p-extend 0.05 \
   --min-windows 1
 ```
 
-### 6) bigWig outputs
+### Step 6: Optional bigWig tracks
 
 Methylation bigWig:
 
@@ -407,7 +232,7 @@ Rscript make_binned_methylation_bigwig.R \
 Variance bigWig:
 
 ```bash
-python make_binned_variance_bigwig.R \
+Rscript make_binned_variance_bigwig.R \
   --inputs rep1_CpG.bw rep2_CpG.bw rep3_CpG.bw rep4_CpG.bw \
   --output group_CpG.variance.bw \
   --bin-size 200 \
@@ -415,16 +240,26 @@ python make_binned_variance_bigwig.R \
   --norm none
 ```
 
-## Notes
+## 6. Runtime Notes
 
-- The pipeline is optimized for two-group comparisons.
-- Contexts (CpG, CHG, CHH) are handled independently.
-- Large datasets can require substantial memory/CPU; tune workers, batches, and filtering thresholds.
+- Pipeline assumes two-group comparisons.
+- Contexts are usually processed independently.
+- For large datasets, tune filtering and parallel options for memory/runtime balance.
 
-## Credits
+For large jobs, set a high-capacity temporary directory:
 
-- Images generated by Google Gemini
+```bash
+export TMPDIR=/path/to/large_storage/tmp
+mkdir -p "$TMPDIR"
+```
 
-## Citation
+## 7. Simulation and Benchmarking
 
-If you use this repository in your analysis, please cite the repository URL together with the method papers used in your workflow (GLMM/DMR integration and upstream tools such as Bismark).
+For controlled benchmark data:
+
+- simulation/README.md
+- simulation/simulate_sites.R
+
+## 8. Citation
+
+If you use this repository, cite the repository URL and upstream method/tool papers used in your workflow.
