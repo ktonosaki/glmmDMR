@@ -116,6 +116,11 @@ Behavior note:
 
 - Non-significant sites are retained, but `meth` is set to `0` for downstream usage.
 
+Null probability note:
+
+- Recommended: specify `--nonconv_chr` to estimate `null_prob` from a non-conversion control chromosome.
+- If no non-conversion control chromosome is available: provide a precomputed value with `--null_prob`.
+
 Example:
 
 ```bash
@@ -123,6 +128,18 @@ python BinomTest.py \
   -i sample_summarized_output.tsv.gz \
   -o sample_binomtest_result.tsv.gz \
   --nonconv_chr chloroplast \
+  --min_coverage 5 \
+  --fdr_threshold 0.05 \
+  --threads 4
+```
+
+Alternative example (without non-conversion control chromosome):
+
+```bash
+python BinomTest.py \
+  -i sample_summarized_output.tsv.gz \
+  -o sample_binomtest_result.tsv.gz \
+  --null_prob 0.012 \
   --min_coverage 5 \
   --fdr_threshold 0.05 \
   --threads 4
