@@ -31,6 +31,8 @@ This repository contains scripts for:
 
 ## Install glmmDMR
 
+Detailed step-by-step guide is available in tutorial_glmmDMR.md.
+
 ### Clone repository
 
 ```bash
