@@ -156,13 +156,6 @@ unmeth = coverage - meth
 - Minimum coverage threshold to keep a site.
 - Default: `5`
 
-## Context-specific Legacy Option
-
-`--zeta_CHH`
-- Zero-inflation rate for CHH.
-- In the current script (`ctx = "CG"`), this option is not used in practice.
-- Default: `0.40`
-
 ## 5. Outputs
 
 All outputs are written to:
