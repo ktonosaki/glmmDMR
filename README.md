@@ -146,6 +146,37 @@ What is usually done:
 Expected output:
 - Sample-wise Bismark extractor outputs (`*.txt.gz`) for each context/strand.
 
+Example (paired-end, minimal flow):
+
+```bash
+# 1) Download FASTQ from SRA
+fasterq-dump SRRXXXXXXX --split-files --threads 8 --outdir raw
+
+# 2) Compress FASTQ
+pigz -p 8 raw/SRRXXXXXXX_1.fastq
+pigz -p 8 raw/SRRXXXXXXX_2.fastq
+
+# 3) Trim reads
+fastp \
+  -i raw/SRRXXXXXXX_1.fastq.gz \
+  -I raw/SRRXXXXXXX_2.fastq.gz \
+  -o clean/sample_1.trimmed.fq.gz \
+  -O clean/sample_2.trimmed.fq.gz \
+  --thread 8
+
+# 4) Align with Bismark (bowtie2)
+bismark --bowtie2 -p 8 -o align /path/to/bismark_genome \
+  -1 clean/sample_1.trimmed.fq.gz \
+  -2 clean/sample_2.trimmed.fq.gz
+
+# 5) Deduplicate and extract methylation calls
+deduplicate_bismark --paired --output_dir align --bam align/sample_bismark_bt2_pe.bam
+bismark_methylation_extractor --paired-end --gzip --parallel 8 \
+  --genome_folder /path/to/bismark_genome \
+  --output calls/sample \
+  align/sample_bismark_bt2_pe.deduplicated.bam
+```
+
 ### Step 2: Summarize methylation calls per sample
 
 Goal: Convert extractor outputs into a compact per-site methylation table.
