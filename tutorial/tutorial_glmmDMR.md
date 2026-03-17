@@ -80,12 +80,14 @@ Input format:
 - Expected columns: read_id, strand, chr, pos, code
 
 Output format (`*_summarized_output.tsv.gz`):
-- `chr` (string)
-- `pos` (int, 1-based)
-- `strand` (`+`/`-`)
-- `meth` (int)
-- `unmeth` (int)
-- `context` (`CpG`/`CHG`/`CHH`)
+| Column | Type / Values | Description |
+| --- | --- | --- |
+| `chr` | string | Chromosome name |
+| `pos` | int (1-based) | Genomic position |
+| `strand` | `+` / `-` | Strand |
+| `meth` | int | Methylated count |
+| `unmeth` | int | Unmethylated count |
+| `context` | `CpG` / `CHG` / `CHH` | Cytosine context |
 
 Example:
 ```bash
@@ -112,7 +114,14 @@ Recommended usage for null probability:
 - Alternative: if no non-conversion control is available, provide a precomputed value via `--null_prob`.
 
 Output format (`*_binomtest_result.tsv.gz`):
-- `chr, pos, strand, meth, unmeth, context`
+| Column | Type / Values | Description |
+| --- | --- | --- |
+| `chr` | string | Chromosome name |
+| `pos` | int (1-based) | Genomic position |
+| `strand` | `+` / `-` | Strand |
+| `meth` | int | Methylated count (non-significant sites are set to 0) |
+| `unmeth` | int | Unmethylated count |
+| `context` | `CpG` / `CHG` / `CHH` | Cytosine context |
 
 Example:
 ```bash
@@ -153,8 +162,10 @@ Options:
 - `--tmpdir`: temporary directory
 
 Output format (`<g1>_<g2>_<ctx>_matrix.tsv.gz`):
-- Fixed 13-column layout derived from `bedtools intersect -wa -wb`
-- Effective content: window coordinates + site coordinates/group/sample/strand/meth/unmeth/coverage
+| Item | Description |
+| --- | --- |
+| Layout | Fixed 13-column layout derived from `bedtools intersect -wa -wb` |
+| Effective content | Window coordinates + site coordinates/group/sample/strand/meth/unmeth/coverage |
 
 Example (2 samples per group):
 ```bash
@@ -219,16 +230,18 @@ Computation:
 - `--seed` (default: 1): random seed
 
 Output format (`*_fit_<family>_<mode>.tsv.gz`):
-- `chr`
-- `start`
-- `end`
-- `model`
-- `p`
-- `delta`
-- `mean_rate1`
-- `mean_rate2`
-- `aic_diff`
-- `bic_diff`
+| Column | Description |
+| --- | --- |
+| `chr` | Chromosome name |
+| `start` | Window start position |
+| `end` | Window end position |
+| `model` | Fitted model identifier |
+| `p` | Statistical significance p-value |
+| `delta` | Estimated methylation difference between groups |
+| `mean_rate1` | Mean methylation rate in group1 |
+| `mean_rate2` | Mean methylation rate in group2 |
+| `aic_diff` | AIC difference metric |
+| `bic_diff` | BIC difference metric |
 
 Example:
 ```bash
@@ -301,9 +314,21 @@ Overlap merge (post-detection re-merge):
 - `--merge-overlaps-gap` (default: 0): allowed gap between DMRs during re-merge
 
 Output format (by mode):
-- TSV: `*_dmrs_<mode>.tsv`
-- BED: `*_dmrs_<mode>.bed`
-- Main columns: `chr,start,end,n_windows,direction,combined_p`
+| File | Pattern | Description |
+| --- | --- | --- |
+| TSV | `*_dmrs_<mode>.tsv` | DMR table output |
+| BED | `*_dmrs_<mode>.bed` | Genome browser-compatible interval output |
+
+Main TSV columns:
+
+| Column | Description |
+| --- | --- |
+| `chr` | Chromosome name |
+| `start` | DMR start position |
+| `end` | DMR end position |
+| `n_windows` | Number of windows included in the DMR |
+| `direction` | Direction of methylation difference |
+| `combined_p` | Combined p-value for the DMR |
 
 Example:
 ```bash
@@ -348,7 +373,9 @@ Options:
 - `--norm` (default: `none`): `none` or `log2p1`
 
 Output format:
-- bigWig score = per-bin variance across tracks
+| Item | Description |
+| --- | --- |
+| bigWig score | Per-bin variance across tracks |
 
 Example:
 ```bash
