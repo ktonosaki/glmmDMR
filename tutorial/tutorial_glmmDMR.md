@@ -194,21 +194,31 @@ bash prepare_matrix.sh \
 - window 単位で GLMM を当てて p 値、delta、要約統計を推定。モデルを選択できるがbeta familyモデルsiteモードが最も正確性が高い。context, coverage, site数, replicate 数で段階フィルタ。必要に応じて `prefilter_delta` で高速事前除外も可能。
 
 
-Options (major):
+Options:
+
+Input / Output:
 - `-i, --infile` (required): 入力 matrix
 - `-o, --out_prefix` (required): 出力 prefix
-- `-c, --context` (default: NULL): context フィルタ
+
+Data selection:
+- `-c, --context` (default: NULL): context フィルタ（`CpG`/`CHG`/`CHH`）
 - `--group1`, `--group2` (required): 比較群ラベル
-- `--min_reps_g1`, `--min_reps_g2` (default: 2): 群ごとの最小 replicate
-- `--family` (default: `beta`): `binom` または `beta`
-- `--mode` (default: `site`): `aggregate` or `site`
-- `--random_effect` (default: TRUE): `(1|sample)` を使用
+
+Model:
+- `--family` (default: `beta`): `binom` または `beta`（`beta` + `site` が最も精度が高い）
+- `--mode` (default: `site`): `aggregate`（window 集計値）または `site`（site 単位）
+- `--random_effect` (default: TRUE): `(1|sample)` ランダム効果を使用
+
+Pre-filter（GLMM 投入前の絞り込み）:
+- `--min_reps_g1`, `--min_reps_g2` (default: 2): 群ごとの最小 replicate 数
 - `--min_cov` (default: 0): site coverage フィルタ
 - `--min_sites_win` (default: 0): window 内最小 site 数
-- `--prefilter_delta` (default: 0): 事前デルタフィルタ
-- `--workers` (default: 4): 並列 worker
+- `--prefilter_delta` (default: 0): delta が小さい window を事前除外（高速化）
+
+Computation:
+- `--workers` (default: 4): 並列 worker 数
 - `--batches` (default: 50): 分割バッチ数
-- `--max_globals_mb` (default: 1000): future global size
+- `--max_globals_mb` (default: 1000): future global size 上限（MB）
 - `--seed` (default: 1): 乱数 seed
 
 Output format (`*_fit_<family>_<mode>.tsv.gz`):
@@ -245,9 +255,9 @@ Rscript run_glmmDMR.R \
 Supported merge modes:
 - `single_seed`: 強い単独 seed window を起点に extension して DMR を構築する、保守的で解釈しやすいモード。
 - `multi_seed`: 有意 seed を複数含む領域を優先して連結するモードで、複数ピークを含む領域に強い。
-- `hybrid_seed`: `single_seed` と `multi_seed` の考え方を併用し、感度と特異度のバランスを狙う実用的なデフォルト。
+- `hybrid_seed`: `multi_seed` を優先し、未カバー領域を `single_seed` で補完するハイブリッド方式。
 
-Options (major):
+Options:
 
 Input / Output:
 - `--windows` (required): GLMM window 結果ファイル（`*_fit_<family>_<mode>.tsv.gz`）
@@ -258,9 +268,9 @@ Mode:
 
 Seed / Extension（検出コアパラメータ）:
 - `--p-seed` (default: 0.05): seed 判定に使う p 閾値
-- `--p-extend` (default: 0.01): extension の許容 p 閾値
+- `--p-extend` (default: 0.05): extension の許容 p 閾値
 - `--max-gap-bp` (default: 200): 隣接 window を同一候補として連結する最大ギャップ
-- `--min-windows` (default: 2): DMR として採用する最小 window 数
+- `--min-windows` (default: 1): DMR として採用する最小 window 数
 - `--min-delta` (default: 0): extension 時の最小効果量しきい値
 - `--max-p-degradation` (default: 1.2): extension 中に許容する p 値の悪化倍率（1.0 = 悪化禁止）
 - `--max-final-p` (default: 1.0): 最終 DMR の combined p 上限
@@ -279,7 +289,7 @@ Post-filter（検出後の整合性チェック）:
 - `--min-median-p` (default: 0.01): DMR 内 window の median p 上限（post-filter 判定）
 - `--min-consistent-frac` (default: 0.5): p <= p-seed となる window の最小割合（post-filter 判定）
 
-Edge / length / median-p filters（`single_seed`, `multi_seed` のみ）:
+Edge / length / median-p filters:
 - `--trim-weak-edges`: DMR 両端の弱い window（p > p-extend）を削る
 - `--min-dmr-length` (default: 0): 最終 DMR 長の下限（bp）
 - `--max-median-p` (default: 1.0): DMR 内 window の median p 上限（独立フィルタ）
@@ -298,7 +308,7 @@ Mode-wise option quick reference:
 | Delta threshold (`--min-delta`) | yes | yes | yes |
 | Adaptive delta (`--adaptive-delta*`) | yes | yes | yes |
 | Seed quality (`--max-p-degradation`, `--max-final-p`, `--min-strong-windows`) | yes | yes | yes |
-| Edge/length/median filters (`--trim-weak-edges`, `--min-dmr-length`, `--max-median-p`) | yes | yes | no |
+| Edge/length/median filters (`--trim-weak-edges`, `--min-dmr-length`, `--max-median-p`) | yes | yes | yes |
 | Overlap merge (`--merge-overlaps`, `--merge-overlaps-gap`) | yes | yes | yes |
 | Multi-seed seed size (`--seed-min-windows`) | no | yes | no |
 
