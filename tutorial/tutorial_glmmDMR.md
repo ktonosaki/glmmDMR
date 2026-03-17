@@ -68,19 +68,7 @@ bismark_methylation_extractor \
 ## 3. Script-by-Script Details
 
 ## 3.1 `summarize_extractor.py`
-
-Purpose:
-- Bismark extractor 出力 (`*.txt.gz`) を context 横断で統合し、site 単位の集計表へ変換。
-
-Execution unit note:
-- このステップはサンプルごとに実行します（1サンプルにつき1つの summarized 出力）。
-
-Core processing:
-1. 入力ディレクトリ内の `CpG_*.txt.gz`, `CHG_*.txt.gz`, `CHH_*.txt.gz` を走査。
-2. ファイル名 suffix (`OT/OB/CTOT/CTOB`) から strand を再定義。
-3. Bismark ヘッダ行を除外して読み込み。
-4. `code` から `meth/unmeth` を判定して site ごとに合算。
-5. context ごとに一時 TSV を作成後、全 context を結合して最終 `tsv.gz` を出力。
+- 入力ディレクトリ内の `CpG_*.txt.gz`, `CHG_*.txt.gz`, `CHH_*.txt.gz` を走査し、site ごとに合算して、context ごとに一時 TSV を作成後、全 context を結合して最終 `tsv.gz` を出力。
 
 Options:
 - `-i, --input` (required): extractor 出力ディレクトリ
@@ -109,31 +97,22 @@ python summarize_extractor.py \
 ```
 
 ## 3.2 `BinomTest.py`
+site 単位で binomial test + BH-FDR 補正を行い、低信頼シグナルを抑制。
 
-Purpose:
-- site 単位で binomial test + BH-FDR 補正を行い、低信頼シグナルを抑制。
 
-Execution unit note:
-- このステップもサンプルごとに実行します（3.1 の各サンプル出力を個別に入力）。
-
-Core processing:
-1. 入力 TSV を読み込み。
-2. `coverage = meth + unmeth` を計算。
-3. `--min_coverage` で site フィルタ。
-4. 帰無確率 `null_prob` を決定。
-5. 各 site に binomial test を実行。
-6. 全 p 値に対して BH 法で FDR 補正。
-7. 非有意 (`FDR > threshold`) の `meth` を 0 に置換。
-8. 最終出力はコア列のみ保存。
 
 Options:
 - `-i, --input` (required): summarize_extractor 出力
 - `-o, --output` (required): 出力 `*.tsv.gz`
-- `--null_prob` (default: None): 帰無確率
+- `--null_prob` (default: None): 帰無確率（`--nonconv_chr` が使えない場合に、事前計算した値を指定）
 - `--fdr_threshold` (default: 0.05): FDR 閾値
 - `--min_coverage` (default: 0): 最低 coverage
-- `--nonconv_chr` (default: None): 非変換率推定に使う染色体
+- `--nonconv_chr` (default: None): 非変換率推定に使う染色体（基本はこちらを推奨）
 - `--threads` (default: 4): 並列数
+
+Recommended usage for null probability:
+- 基本運用: `--nonconv_chr` を指定して、非変換コントロール染色体から `null_prob` を推定する。
+- 代替運用: 非変換コントロールがない場合は、外部で計算した `null_prob` を `--null_prob` に明示指定して実行する。
 
 Input format:
 - 必須列: `chr, pos, strand, meth, unmeth, context`
@@ -151,6 +130,17 @@ python BinomTest.py \
   -i matrix/sample_summarized_output.tsv.gz \
   -o binom/sample_binomtest_result.tsv.gz \
   --nonconv_chr chloroplast \
+  --min_coverage 5 \
+  --fdr_threshold 0.05 \
+  --threads 4
+```
+
+Example (without nonconv control chromosome; use precomputed null_prob):
+```bash
+python BinomTest.py \
+  -i matrix/sample_summarized_output.tsv.gz \
+  -o binom/sample_binomtest_result.tsv.gz \
+  --null_prob 0.012 \
   --min_coverage 5 \
   --fdr_threshold 0.05 \
   --threads 4
