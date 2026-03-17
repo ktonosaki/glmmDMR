@@ -1,4 +1,3 @@
-# glmmDMR
 <img width="469" height="98" alt="図1" src="https://github.com/user-attachments/assets/03735326-8dc3-417d-a01b-399c7f8a3d57" />
 
 ### Credits
