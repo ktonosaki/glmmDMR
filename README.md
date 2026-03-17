@@ -2,10 +2,6 @@
 ## glmmDMR
 A sliding-window strategy was used to partition DNA methylation data into fixed-size windows, and a generalized linear mixed model (GLMM) was applied with methylated cytosine counts in each window as the response variable. By modeling the comparison target as a fixed effect while accounting for biological replicates, the framework estimates window-level methylation differences and statistical significance while incorporating between-replicate variability. In addition, to construct DMRs from windows judged significant, two integration methods were implemented: (i) a Multi-seed approach that statistically combines multiple adjacent moderate signals, and (ii) a Single-seed approach that starts from a strongly significant single window and expands the region.
 
-glmmDMR is a lightweight script collection for DNA methylation analysis using window-level GLMM and DMR integration.
-
-This README is a practical guide: setup, end-to-end workflow, key options, and expected outputs.
-
 ## 1. Repository Contents
 
 Core scripts:
