@@ -70,7 +70,7 @@ load_data <- function(path) {
   return(dt[is.finite(p) & p > 0 & p <= 1 & is.finite(delta)])
 }
 
-# BEDファイル出力
+# Write BED file
 write_bed <- function(dmrs, out_path) {
   bed_data <- dmrs[, .(
     chr,
@@ -99,7 +99,7 @@ p_stouffer <- function(p_values) {
   2 * pnorm(-abs(combined_z))
 }
 
-# DMRごとのdelta計算
+# Calculate delta summary per DMR
 add_delta_summary <- function(dmrs, win) {
   if (nrow(dmrs) == 0) return(dmrs)
   dmrs_with_delta <- lapply(1:nrow(dmrs), function(i) {
@@ -115,14 +115,14 @@ add_delta_summary <- function(dmrs, win) {
   return(data.table::rbindlist(dmrs_with_delta))
 }
 
-# 適応的delta閾値の計算: 候補DMRのdelta分布から閾値を決定
+# Calculate adaptive delta threshold from candidate DMR delta distribution
 calculate_adaptive_delta_threshold <- function(dmrs, win, method = "median_ratio", ratio = 0.6) {
   if (nrow(dmrs) == 0) {
     message("[WARN] No DMRs found for adaptive threshold calculation. Using default min-delta.")
     return(0)
   }
   
-  # 各DMRに含まれるウィンドウのdelta値を収集
+  # Collect delta values from windows within each DMR
   all_deltas <- unlist(lapply(1:nrow(dmrs), function(i) {
     row <- dmrs[i, ]
     overlapping_windows <- win[chr == row$chr &
@@ -138,29 +138,29 @@ calculate_adaptive_delta_threshold <- function(dmrs, win, method = "median_ratio
     return(0)
   }
   
-  # 統計量の計算
+  # Compute summary statistics
   median_delta <- median(all_deltas, na.rm = TRUE)
   q25_delta <- quantile(all_deltas, 0.25, na.rm = TRUE)
   q10_delta <- quantile(all_deltas, 0.10, na.rm = TRUE)
   mad_delta <- mad(all_deltas, na.rm = TRUE)  # Median Absolute Deviation
   
-  # 閾値決定方法
+  # Determine threshold by method
   threshold <- switch(method,
-    "median_ratio" = median_delta * ratio,     # 中央値の60%など
-    "q50" = median_delta,                      # 中央値（50パーセンタイル）
-    "q25" = q25_delta,                         # 第1四分位点
-    "q10" = q10_delta,                         # 10パーセンタイル
-    "mad" = median_delta - mad_delta,          # 中央値 - MAD
-    median_delta * ratio                       # デフォルト
+    "median_ratio" = median_delta * ratio,     # e.g. 60% of median
+    "q50" = median_delta,                      # median (50th percentile)
+    "q25" = q25_delta,                         # 1st quartile
+    "q10" = q10_delta,                         # 10th percentile
+    "mad" = median_delta - mad_delta,          # median - MAD
+    median_delta * ratio                       # default
   )
   
   message(sprintf("[INFO] Adaptive delta threshold: %.4f (method=%s, median=%.4f, Q25=%.4f, Q10=%.4f)",
                   threshold, method, median_delta, q25_delta, q10_delta))
   
-  return(max(0, threshold))  # 負の値を防ぐ
+  return(max(0, threshold))  # Prevent negative threshold
 }
 
-# DMR境界の最適化: 両端の弱いウィンドウを除去
+# Optimize DMR boundaries: remove weak windows from both edges
 trim_dmr_edges <- function(dmrs, win, p_extend) {
   if (nrow(dmrs) == 0) return(dmrs)
   
@@ -168,7 +168,7 @@ trim_dmr_edges <- function(dmrs, win, p_extend) {
   
   trimmed <- lapply(1:nrow(dmrs), function(i) {
     row <- dmrs[i, ]
-    # 該当するwindowを取得
+    # Get overlapping windows
     overlapping_windows <- win[chr == row$chr &
                                 direction == row$direction &
                                 start >= row$start &
@@ -177,26 +177,26 @@ trim_dmr_edges <- function(dmrs, win, p_extend) {
     
     if (nrow(overlapping_windows) == 0) return(NULL)
     
-    # 前方から弱いウィンドウを除去
+    # Trim weak windows from the forward edge
     start_idx <- 1
     while (start_idx <= nrow(overlapping_windows) && 
            overlapping_windows$p[start_idx] > p_extend) {
       start_idx <- start_idx + 1
     }
     
-    # 後方から弱いウィンドウを除去
+    # Trim weak windows from the backward edge
     end_idx <- nrow(overlapping_windows)
     while (end_idx >= start_idx && 
            overlapping_windows$p[end_idx] > p_extend) {
       end_idx <- end_idx - 1
     }
     
-    # 有効なウィンドウが残っているか
+    # Check if any valid windows remain
     if (start_idx > end_idx) return(NULL)
     
     trimmed_windows <- overlapping_windows[start_idx:end_idx]
     
-    # 新しい境界を設定
+    # Set new boundaries
     row$start <- min(trimmed_windows$start)
     row$end <- max(trimmed_windows$end)
     row$n_windows <- nrow(trimmed_windows)
@@ -209,7 +209,7 @@ trim_dmr_edges <- function(dmrs, win, p_extend) {
   return(trimmed)
 }
 
-# ポストフィルタリング: FP削減のための品質チェック
+# Post-filtering: quality check to reduce false positives
 post_filter_dmrs <- function(dmrs, win, min_median_p, min_consistent_frac, p_seed) {
   if (nrow(dmrs) == 0) return(dmrs)
   
@@ -218,7 +218,7 @@ post_filter_dmrs <- function(dmrs, win, min_median_p, min_consistent_frac, p_see
   
   keep <- sapply(1:nrow(dmrs), function(i) {
     row <- dmrs[i, ]
-    # 該当するwindowを取得
+    # Get overlapping windows
     overlapping_windows <- win[chr == row$chr &
                                 direction == row$direction &
                                 start >= row$start &
@@ -226,13 +226,13 @@ post_filter_dmrs <- function(dmrs, win, min_median_p, min_consistent_frac, p_see
     
     if (nrow(overlapping_windows) == 0) return(FALSE)
     
-    # 品質チェック1: p値の中央値
+    # Quality check 1: median p-value
     median_p <- median(overlapping_windows$p, na.rm = TRUE)
     
-    # 品質チェック2: p < p_seedの窓の割合
+    # Quality check 2: fraction of windows with p < p_seed
     consistent_frac <- mean(overlapping_windows$p <= p_seed, na.rm = TRUE)
     
-    # 両方の条件を満たすか
+    # Check if both conditions are met
     median_p <= min_median_p && consistent_frac >= min_consistent_frac
   })
   
@@ -295,7 +295,7 @@ merge_overlapping_dmrs <- function(dmrs, win, max_gap_bp = 0, p_seed = 0.05) {
   data.table::rbindlist(merged)
 }
 
-# Simes法でDMRを検出(双方向拡張)
+# Detect DMRs using Simes method (bidirectional extension)
 detect_dmrs_simes <- function(win, p_seed, max_gap_bp, min_windows) {
   res <- list()
   i <- 1L
@@ -309,7 +309,7 @@ detect_dmrs_simes <- function(win, p_seed, max_gap_bp, min_windows) {
     direction <- win$direction[i]
     run_idx <- i
     
-    # 前方拡張
+    # Forward extension
     j <- i + 1
     while (j <= n && win$chr[j] == chr && win$direction[j] == direction) {
       gap <- win$start[j] - win$end[j - 1]
@@ -318,7 +318,7 @@ detect_dmrs_simes <- function(win, p_seed, max_gap_bp, min_windows) {
       j <- j + 1
     }
     
-    # 後方拡張
+    # Backward extension
     k <- i - 1
     while (k >= 1 && win$chr[k] == chr && win$direction[k] == direction) {
       gap <- win$start[i] - win$end[k]
@@ -327,7 +327,7 @@ detect_dmrs_simes <- function(win, p_seed, max_gap_bp, min_windows) {
       k <- k - 1
     }
     
-    # Simes統合p値を計算
+    # Compute Simes combined p-value
     simes_p <- p_simes(win$p[run_idx])
     if (length(run_idx) >= min_windows && simes_p <= p_seed) {
       res[[length(res) + 1]] <- list(
@@ -344,7 +344,7 @@ detect_dmrs_simes <- function(win, p_seed, max_gap_bp, min_windows) {
   return(data.table::rbindlist(res))
 }
 
-# Stouffer法でDMRを検出(双方向拡張)
+# Detect DMRs using Stouffer method (bidirectional extension)
 detect_dmrs_stouffer <- function(win, p_seed, p_extend, max_gap_bp, min_windows) {
   res <- list()
   i <- 1L
@@ -358,7 +358,7 @@ detect_dmrs_stouffer <- function(win, p_seed, p_extend, max_gap_bp, min_windows)
     direction <- win$direction[i]
     run_idx <- i
     
-    # 前方拡張
+    # Forward extension
     j <- i + 1
     while (j <= n && win$chr[j] == chr && win$direction[j] == direction) {
       gap <- win$start[j] - win$end[max(run_idx)]
@@ -375,7 +375,7 @@ detect_dmrs_stouffer <- function(win, p_seed, p_extend, max_gap_bp, min_windows)
       }
     }
     
-    # 後方拡張
+    # Backward extension
     k <- i - 1
     while (k >= 1 && win$chr[k] == chr && win$direction[k] == direction) {
       gap <- win$start[min(run_idx)] - win$end[k]
@@ -392,7 +392,7 @@ detect_dmrs_stouffer <- function(win, p_seed, p_extend, max_gap_bp, min_windows)
       }
     }
     
-    # 最終的な統合p値を計算
+    # Compute final combined p-value
     z_scores <- qnorm(1 - win$p[run_idx])
     combined_z <- sum(z_scores) / sqrt(length(z_scores))
     stouffer_p <- 2 * pnorm(-abs(combined_z))
@@ -411,7 +411,7 @@ detect_dmrs_stouffer <- function(win, p_seed, p_extend, max_gap_bp, min_windows)
   return(data.table::rbindlist(res))
 }
 
-# Single Seed法でDMRを検出(単一窓シードからStouffer法で双方向拡張)
+# Detect DMRs using Single Seed method (bidirectional extension from single window seed using Stouffer method)
 detect_dmrs_single_seed <- function(win, p_seed, p_extend, max_gap_bp, min_windows, min_delta = 0, 
                                     max_p_degradation = 1.2, max_final_p = 1.0, min_strong_windows = 0.5) {
   res <- list()
@@ -419,7 +419,7 @@ detect_dmrs_single_seed <- function(win, p_seed, p_extend, max_gap_bp, min_windo
   n <- nrow(win)
   
   while (i <= n) {
-    # 単一窓がp_seed以下ならシードとする
+    # Single window is a seed if p <= p_seed
     if (win$p[i] > p_seed) {
       i <- i + 1
       next
@@ -429,16 +429,16 @@ detect_dmrs_single_seed <- function(win, p_seed, p_extend, max_gap_bp, min_windo
     direction <- win$direction[i]
     run_idx <- i
     
-    # 初期のStouffer p値（シード単体）
+    # Initial Stouffer p-value (single seed)
     current_stouffer_p <- win$p[i]
     
-    # Stouffer法で前方拡張（p値悪化チェック + 効果量フィルタ）
+    # Forward extension with Stouffer (p-value degradation check + effect size filter)
     j <- i + 1
     while (j <= n && win$chr[j] == chr && win$direction[j] == direction) {
       gap <- win$start[j] - win$end[max(run_idx)]
       if (gap > max_gap_bp) break
       
-      # 効果量フィルタ（設定されている場合は小さいdeltaをスキップ）
+      # Effect size filter (skip small delta if set)
       if (min_delta > 0 && abs(win$delta[j]) < min_delta) {
         j <- j + 1
         next
@@ -449,23 +449,23 @@ detect_dmrs_single_seed <- function(win, p_seed, p_extend, max_gap_bp, min_windo
       combined_z <- sum(z_scores) / sqrt(length(z_scores))
       stouffer_p <- 2 * pnorm(-abs(combined_z))
       
-      # p値悪化チェック: より厳格な閾値を使用
+      # P-value degradation check: use stricter threshold
       if (stouffer_p <= p_extend && stouffer_p <= current_stouffer_p * max_p_degradation) {
         run_idx <- test_idx
-        current_stouffer_p <- stouffer_p  # p値を更新
+        current_stouffer_p <- stouffer_p  # Update p-value
         j <- j + 1
       } else {
         break
       }
     }
     
-    # Stouffer法で後方拡張（p値悪化チェック + 効果量フィルタ）
+    # Backward extension with Stouffer (p-value degradation check + effect size filter)
     k <- i - 1
     while (k >= 1 && win$chr[k] == chr && win$direction[k] == direction) {
       gap <- win$start[min(run_idx)] - win$end[k]
       if (gap > max_gap_bp) break
       
-      # 効果量フィルタ
+      # Effect size filter
       if (min_delta > 0 && abs(win$delta[k]) < min_delta) {
         k <- k - 1
         next
@@ -476,7 +476,7 @@ detect_dmrs_single_seed <- function(win, p_seed, p_extend, max_gap_bp, min_windo
       combined_z <- sum(z_scores) / sqrt(length(z_scores))
       stouffer_p <- 2 * pnorm(-abs(combined_z))
       
-      # p値悪化チェック: より厳格な閾値を使用
+      # P-value degradation check: use stricter threshold
       if (stouffer_p <= p_extend && stouffer_p <= current_stouffer_p * max_p_degradation) {
         run_idx <- test_idx
         current_stouffer_p <- stouffer_p
@@ -486,15 +486,15 @@ detect_dmrs_single_seed <- function(win, p_seed, p_extend, max_gap_bp, min_windo
       }
     }
     
-    # 最終的な統合p値を計算
+    # Compute final combined p-value
     z_scores_final <- qnorm(1 - win$p[run_idx])
     combined_z_final <- sum(z_scores_final) / sqrt(length(z_scores_final))
     final_stouffer_p <- 2 * pnorm(-abs(combined_z_final))
     
-    # 品質チェック: 強いシグナルのウィンドウ割合
+    # Quality check: fraction of windows with strong signal
     strong_windows_frac <- sum(win$p[run_idx] <= p_seed) / length(run_idx)
     
-    # DMRを追加（フィルタリング条件を適用）
+    # Add DMR (apply filtering conditions)
     if (length(run_idx) >= min_windows && 
         final_stouffer_p <= max_final_p && 
         strong_windows_frac >= min_strong_windows) {
@@ -515,7 +515,7 @@ detect_dmrs_single_seed <- function(win, p_seed, p_extend, max_gap_bp, min_windo
   return(data.table::rbindlist(res))
 }
 
-# Stouffer_multi_seed法: 複数ウィンドウでStoufferシードを作成（truth DMR検出率向上）
+# Multi-seed Stouffer method: create Stouffer seed from multiple windows (improved truth DMR detection)
 detect_dmrs_stouffer_multi_seed <- function(win, p_seed, p_extend, max_gap_bp, min_windows, min_delta = 0, 
                                              max_p_degradation = 1.2, max_final_p = 1.0, min_strong_windows = 0.5, 
                                              seed_min_windows = 2) {
@@ -527,7 +527,7 @@ detect_dmrs_stouffer_multi_seed <- function(win, p_seed, p_extend, max_gap_bp, m
     chr <- win$chr[i]
     direction <- win$direction[i]
     
-    # 複数ウィンドウでStoufferシードを作成
+    # Create Stouffer seed from multiple windows
     seed_idx <- i
     j <- i + 1
     while (j <= n && win$chr[j] == chr && win$direction[j] == direction) {
@@ -536,20 +536,20 @@ detect_dmrs_stouffer_multi_seed <- function(win, p_seed, p_extend, max_gap_bp, m
       seed_idx <- c(seed_idx, j)
       j <- j + 1
       
-      # シードが十分なサイズになったらStouffer検定
+      # Apply Stouffer test when seed reaches sufficient size
       if (length(seed_idx) >= seed_min_windows) {
         z_scores <- qnorm(1 - win$p[seed_idx])
         combined_z <- sum(z_scores) / sqrt(length(z_scores))
         stouffer_seed_p <- 2 * pnorm(-abs(combined_z))
         
         if (stouffer_seed_p <= p_seed) {
-          # 有効なシードとして採用
+          # Adopt as valid seed
           break
         }
       }
     }
     
-    # シードが条件を満たさない場合は次へ
+    # If seed does not meet conditions, move to next
     if (length(seed_idx) < seed_min_windows) {
       i <- max(seed_idx) + 1
       next
@@ -564,11 +564,11 @@ detect_dmrs_stouffer_multi_seed <- function(win, p_seed, p_extend, max_gap_bp, m
       next
     }
     
-    # シードから前方・後方拡張
+    # Forward and backward extension from seed
     run_idx <- seed_idx
     current_stouffer_p <- stouffer_seed_p
     
-    # 前方拡張
+    # Forward extension
     j <- max(run_idx) + 1
     while (j <= n && win$chr[j] == chr && win$direction[j] == direction) {
       gap <- win$start[j] - win$end[max(run_idx)]
@@ -593,7 +593,7 @@ detect_dmrs_stouffer_multi_seed <- function(win, p_seed, p_extend, max_gap_bp, m
       }
     }
     
-    # 後方拡張
+    # Backward extension
     k <- min(seed_idx) - 1
     while (k >= 1 && win$chr[k] == chr && win$direction[k] == direction) {
       gap <- win$start[min(run_idx)] - win$end[k]
@@ -618,12 +618,12 @@ detect_dmrs_stouffer_multi_seed <- function(win, p_seed, p_extend, max_gap_bp, m
       }
     }
     
-    # 最終統合p値
+    # Final combined p-value
     z_scores_final <- qnorm(1 - win$p[run_idx])
     combined_z_final <- sum(z_scores_final) / sqrt(length(z_scores_final))
     final_stouffer_p <- 2 * pnorm(-abs(combined_z_final))
     
-    # 品質チェック
+    # Quality check
     strong_windows_frac <- sum(win$p[run_idx] <= p_seed) / length(run_idx)
     
     if (length(run_idx) >= min_windows && 
@@ -659,7 +659,7 @@ detect_dmrs_combined <- function(win, p_seed, p_extend, max_gap_bp, min_windows,
     chr <- win$chr[i]
     direction <- win$direction[i]
     
-    # Simes法でシード（起点）を検出
+    # Detect seed (starting point) using Simes method
     seed_idx <- i
     j <- i + 1
     while (j <= n && win$chr[j] == chr && win$direction[j] == direction) {
@@ -669,26 +669,26 @@ detect_dmrs_combined <- function(win, p_seed, p_extend, max_gap_bp, min_windows,
       j <- j + 1
     }
     
-    # Simes統合p値で起点として適切か判定
+    # Judge if seed is appropriate as starting point based on Simes combined p-value
     simes_seed_p <- p_simes(win$p[seed_idx])
     if (simes_seed_p > p_seed || length(seed_idx) < min_windows) {
       i <- max(seed_idx) + 1
       next
     }
     
-    # 初期のStouffer p値を計算
+    # Compute initial Stouffer p-value
     z_scores_init <- qnorm(1 - win$p[seed_idx])
     combined_z_init <- sum(z_scores_init) / sqrt(length(z_scores_init))
     current_stouffer_p <- 2 * pnorm(-abs(combined_z_init))
     
-    # Stouffer法で前方拡張（p値悪化チェック + 効果量フィルタ）
+    # Forward extension with Stouffer (p-value degradation check + effect size filter)
     run_idx <- seed_idx
     j <- max(run_idx) + 1
     while (j <= n && win$chr[j] == chr && win$direction[j] == direction) {
       gap <- win$start[j] - win$end[max(run_idx)]
       if (gap > max_gap_bp) break
       
-      # 効果量フィルタ（設定されている場合は小さいdeltaをスキップ）
+      # Effect size filter (skip small delta if set)
       if (min_delta > 0 && abs(win$delta[j]) < min_delta) {
         j <- j + 1
         next
@@ -699,23 +699,23 @@ detect_dmrs_combined <- function(win, p_seed, p_extend, max_gap_bp, min_windows,
       combined_z <- sum(z_scores) / sqrt(length(z_scores))
       stouffer_p <- 2 * pnorm(-abs(combined_z))
       
-      # p値悪化チェック: 新しいp値が現在のp値より悪化（大きくなる）する場合は拡張停止
+      # P-value degradation check: stop extension if new p-value is worse (larger) than current
       if (stouffer_p <= p_extend && stouffer_p <= current_stouffer_p * 1.5) {
         run_idx <- test_idx
-        current_stouffer_p <- stouffer_p  # p値を更新
+        current_stouffer_p <- stouffer_p  # Update p-value
         j <- j + 1
       } else {
         break
       }
     }
     
-    # Stouffer法で後方拡張（p値悪化チェック + 効果量フィルタ）
+    # Backward extension with Stouffer (p-value degradation check + effect size filter)
     k <- min(seed_idx) - 1
     while (k >= 1 && win$chr[k] == chr && win$direction[k] == direction) {
       gap <- win$start[min(run_idx)] - win$end[k]
       if (gap > max_gap_bp) break
       
-      # 効果量フィルタ
+      # Effect size filter
       if (min_delta > 0 && abs(win$delta[k]) < min_delta) {
         k <- k - 1
         next
@@ -726,7 +726,7 @@ detect_dmrs_combined <- function(win, p_seed, p_extend, max_gap_bp, min_windows,
       combined_z <- sum(z_scores) / sqrt(length(z_scores))
       stouffer_p <- 2 * pnorm(-abs(combined_z))
       
-      # p値悪化チェック
+      # P-value degradation check
       if (stouffer_p <= p_extend && stouffer_p <= current_stouffer_p * 1.5) {
         run_idx <- test_idx
         current_stouffer_p <- stouffer_p
@@ -736,13 +736,13 @@ detect_dmrs_combined <- function(win, p_seed, p_extend, max_gap_bp, min_windows,
       }
     }
     
-    # 最終的な統合p値を計算
+    # Compute final combined p-value
     final_simes_p <- p_simes(win$p[run_idx])
     z_scores_final <- qnorm(1 - win$p[run_idx])
     combined_z_final <- sum(z_scores_final) / sqrt(length(z_scores_final))
     final_stouffer_p <- 2 * pnorm(-abs(combined_z_final))
     
-    # DMRを追加
+    # Add DMR
     res[[length(res) + 1]] <- list(
       chr = chr,
       start = min(win$start[run_idx]),
@@ -770,33 +770,33 @@ if (!opt$`merge-mode` %in% valid_modes) {
 
 if (opt$`merge-mode` == "Simes") {
   dmrs_simes <- detect_dmrs_simes(win, opt$`p-seed`, opt$`max-gap-bp`, opt$`min-windows`)
-  dmrs_simes <- add_delta_summary(dmrs_simes, win)  # Delta値を追加
+  dmrs_simes <- add_delta_summary(dmrs_simes, win)  # Add delta values
   fwrite(dmrs_simes, sprintf("%s_dmrs_simes.tsv", opt$`out-prefix`), sep = "\t")
-  write_bed(dmrs_simes, sprintf("%s_dmrs_simes.bed", opt$`out-prefix`))  # BED出力
+  write_bed(dmrs_simes, sprintf("%s_dmrs_simes.bed", opt$`out-prefix`))  # BED output
 } else if (opt$`merge-mode` == "Stouffer") {
   dmrs_stouffer <- detect_dmrs_stouffer(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`)
   if (opt$`post-filter`) {
     dmrs_stouffer <- post_filter_dmrs(dmrs_stouffer, win, opt$`min-median-p`, 
                                       opt$`min-consistent-frac`, opt$`p-seed`)
   }
-  dmrs_stouffer <- add_delta_summary(dmrs_stouffer, win)  # Delta値を追加
+  dmrs_stouffer <- add_delta_summary(dmrs_stouffer, win)  # Add delta values
   fwrite(dmrs_stouffer, sprintf("%s_dmrs_stouffer.tsv", opt$`out-prefix`), sep = "\t")
-  write_bed(dmrs_stouffer, sprintf("%s_dmrs_stouffer.bed", opt$`out-prefix`))  # BED出力
+  write_bed(dmrs_stouffer, sprintf("%s_dmrs_stouffer.bed", opt$`out-prefix`))  # BED output
 } else if (opt$`merge-mode` == "multi_seed") {
-  # 適応的delta閾値を使用する場合: まず緩い条件でDMRを検出
+  # When using adaptive delta threshold: first detect DMRs with loose conditions
   if (opt$`adaptive-delta`) {
     message("[INFO] Using adaptive delta threshold...")
-    # 第1段階: min-delta=0でDMR候補を検出
+    # Stage 1: detect candidate DMRs with min-delta=0
     dmrs_initial <- detect_dmrs_stouffer_multi_seed(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`, 
                                                      min_delta = 0, opt$`max-p-degradation`, opt$`max-final-p`, opt$`min-strong-windows`,
                                                      seed_min_windows = opt$`seed-min-windows`)
     
-    # 第2段階: DMR候補のdelta分布から適応的閾値を計算
+    # Stage 2: compute adaptive threshold from delta distribution of candidate DMRs
     adaptive_min_delta <- calculate_adaptive_delta_threshold(dmrs_initial, win, 
                                                               method = opt$`adaptive-delta-method`, 
                                                               ratio = opt$`adaptive-delta-ratio`)
     
-    # 第3段階: 適応的閾値で再検出
+    # Stage 3: re-detect with adaptive threshold
     dmrs_stouffer_ms <- detect_dmrs_stouffer_multi_seed(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`, 
                                                          adaptive_min_delta, opt$`max-p-degradation`, opt$`max-final-p`, opt$`min-strong-windows`,
                                                          seed_min_windows = opt$`seed-min-windows`)
@@ -850,26 +850,26 @@ if (opt$`merge-mode` == "Simes") {
     dmrs_hybrid_seed <- post_filter_dmrs(dmrs_hybrid_seed, win, opt$`min-median-p`,
                                          opt$`min-consistent-frac`, opt$`p-seed`)
   }
-  dmrs_hybrid_seed <- add_delta_summary(dmrs_hybrid_seed, win)  # Delta値を追加
+  dmrs_hybrid_seed <- add_delta_summary(dmrs_hybrid_seed, win)  # Add delta values
   fwrite(dmrs_hybrid_seed, sprintf("%s_dmrs_hybrid_seed.tsv", opt$`out-prefix`), sep = "\t")
-  write_bed(dmrs_hybrid_seed, sprintf("%s_dmrs_hybrid_seed.bed", opt$`out-prefix`))  # BED出力
+  write_bed(dmrs_hybrid_seed, sprintf("%s_dmrs_hybrid_seed.bed", opt$`out-prefix`))  # BED output
 } else if (opt$`merge-mode` == "single_seed") {
   dmrs_single_seed <- detect_dmrs_single_seed(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`, 
                                               opt$`min-delta`, opt$`max-p-degradation`, opt$`max-final-p`, opt$`min-strong-windows`)
   
-  # 境界トリミング（オプション）
+  # Edge trimming (optional)
   if (opt$`trim-weak-edges`) {
     dmrs_single_seed <- trim_dmr_edges(dmrs_single_seed, win, opt$`p-extend`)
   }
   
-  # DMRサイズフィルタ
+  # DMR size filter
   if (opt$`min-dmr-length` > 0) {
     before_n <- nrow(dmrs_single_seed)
     dmrs_single_seed <- dmrs_single_seed[end - start >= opt$`min-dmr-length`, ]
     message("[INFO] DMR length filter (>= ", opt$`min-dmr-length`, " bp): ", before_n, " -> ", nrow(dmrs_single_seed))
   }
   
-  # 中央値p値フィルタ
+  # Median p-value filter
   if (opt$`max-median-p` < 1.0) {
     before_n <- nrow(dmrs_single_seed)
     dmrs_single_seed <- lapply(1:nrow(dmrs_single_seed), function(i) {
@@ -887,9 +887,9 @@ if (opt$`merge-mode` == "Simes") {
     dmrs_single_seed <- post_filter_dmrs(dmrs_single_seed, win, opt$`min-median-p`, 
                                          opt$`min-consistent-frac`, opt$`p-seed`)
   }
-  dmrs_single_seed <- add_delta_summary(dmrs_single_seed, win)  # Delta値を追加
+  dmrs_single_seed <- add_delta_summary(dmrs_single_seed, win)  # Add delta values
   fwrite(dmrs_single_seed, sprintf("%s_dmrs_single_seed.tsv", opt$`out-prefix`), sep = "\t")
-  write_bed(dmrs_single_seed, sprintf("%s_dmrs_single_seed.bed", opt$`out-prefix`))  # BED出力
+  write_bed(dmrs_single_seed, sprintf("%s_dmrs_single_seed.bed", opt$`out-prefix`))  # BED output
 }
 
 message("[INFO] DMR analysis complete.")
