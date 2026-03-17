@@ -8,52 +8,69 @@ suppressPackageStartupMessages({
 
 #========================= Options =============================================
 option_list <- list(
+
+  # --- Input / Output ---
   make_option(c("--windows"), type="character",
               help="GLMM window-level results (tsv/tsv.gz). Required."),
   make_option(c("--out-prefix"), type="character", default="results/dmr",
               help="Output prefix for results [default %default]"),
+
+  # --- Mode ---
   make_option(c("--merge-mode"), type="character", default="hybrid_seed",
-              help="DMR merge strategy: Simes, Stouffer, single_seed, multi_seed, hybrid_seed [default %default]"),
+              help="DMR merge strategy: single_seed, multi_seed, hybrid_seed [default %default]"),
+
+  # --- Seed / Extension (core detection parameters) ---
   make_option(c("--p-seed"), type="numeric", default=0.05,
               help="Seed p-value threshold for starting a DMR [default %default]"),
-  make_option(c("--p-extend"), type="numeric", default=0.01,
+  make_option(c("--p-extend"), type="numeric", default=0.05,
               help="Extend p-value threshold for growing a DMR [default %default]"),
   make_option(c("--max-gap-bp"), type="integer", default=200,
               help="Max gap in bp to continue merging [default %default]"),
-  make_option(c("--merge-overlaps"), action="store_true", default=FALSE,
-              help="Merge overlapping DMRs after detection [default %default]"),
-  make_option(c("--merge-overlaps-gap"), type="integer", default=0,
-              help="Max gap (bp) to merge overlapping DMRs [default %default]"),
-  make_option(c("--min-windows"), type="integer", default=2,
+  make_option(c("--min-windows"), type="integer", default=1,
               help="Minimum windows for a DMR [default %default]"),
-  make_option(c("--post-filter"), action="store_true", default=FALSE,
-              help="Enable post-filtering to reduce false positives [default %default]"),
-  make_option(c("--min-median-p"), type="numeric", default=0.01,
-              help="Minimum median p-value for DMRs (post-filter) [default %default]"),
-  make_option(c("--min-consistent-frac"), type="numeric", default=0.5,
-              help="Minimum fraction of windows with p < p-seed (post-filter) [default %default]"),
   make_option(c("--min-delta"), type="numeric", default=0,
               help="Minimum absolute delta for extension (effect size filter) [default %default]"),
   make_option(c("--max-p-degradation"), type="numeric", default=1.2,
               help="Maximum allowed p-value degradation during extension (1.0=no degradation) [default %default]"),
   make_option(c("--max-final-p"), type="numeric", default=1.0,
-              help="Maximum final combined p-value for DMRs (strict filter) [default %default]"),
+              help="Maximum final combined p-value for DMRs [default %default]"),
   make_option(c("--min-strong-windows"), type="numeric", default=0.5,
-              help="Minimum fraction of windows with p < p-seed in final DMR [default %default]"),
+              help="Minimum fraction of windows with p <= p-seed in final DMR [default %default]"),
+
+  # --- Adaptive delta threshold ---
+  make_option(c("--adaptive-delta"), action="store_true", default=FALSE,
+              help="Use adaptive delta threshold based on candidate DMR distribution [default %default]"),
+  make_option(c("--adaptive-delta-method"), type="character", default="median_ratio",
+              help="Adaptive delta method: median_ratio, q50, q25, q10, mad [default %default]"),
+  make_option(c("--adaptive-delta-ratio"), type="numeric", default=0.6,
+              help="Ratio for median_ratio method (0.6 = 60%% of median) [default %default]"),
+
+  # --- Multi-seed specific ---
+  make_option(c("--seed-min-windows"), type="integer", default=1,
+              help="Minimum windows for multi-seed Stouffer method (1=single+multi, 2=multi only) [default %default]"),
+
+  # --- Post-filter (consistency check after detection) ---
+  make_option(c("--post-filter"), action="store_true", default=FALSE,
+              help="Enable post-filtering to reduce false positives [default %default]"),
+  make_option(c("--min-median-p"), type="numeric", default=0.01,
+              help="Maximum median p-value of windows in a DMR (post-filter) [default %default]"),
+  make_option(c("--min-consistent-frac"), type="numeric", default=0.5,
+              help="Minimum fraction of windows with p <= p-seed (post-filter) [default %default]"),
+
+  # --- Edge / length / median-p filters ---
   make_option(c("--trim-weak-edges"), action="store_true", default=FALSE,
               help="Trim weak windows (p > p-extend) from DMR edges [default %default]"),
   make_option(c("--min-dmr-length"), type="integer", default=0,
               help="Minimum DMR length in bp (0=no filter) [default %default]"),
   make_option(c("--max-median-p"), type="numeric", default=1.0,
               help="Maximum median p-value for final DMRs [default %default]"),
-  make_option(c("--seed-min-windows"), type="integer", default=1,
-              help="Minimum windows for multi-seed Stouffer method (1=single+multi, 2=multi only) [default %default]"),
-  make_option(c("--adaptive-delta"), action="store_true", default=FALSE,
-              help="Use adaptive delta threshold based on candidate DMR distribution [default %default]"),
-  make_option(c("--adaptive-delta-method"), type="character", default="median_ratio",
-              help="Adaptive delta method: median_ratio, q50, q25, q10, mad [default %default]"),
-  make_option(c("--adaptive-delta-ratio"), type="numeric", default=0.6,
-              help="Ratio for median_ratio method (0.6 = 60%% of median) [default %default]")
+
+  # --- Overlap merge (post-detection re-merge) ---
+  make_option(c("--merge-overlaps"), action="store_true", default=FALSE,
+              help="Merge overlapping/nearby same-direction DMRs after detection [default %default]"),
+  make_option(c("--merge-overlaps-gap"), type="integer", default=0,
+              help="Max gap (bp) between DMRs to merge [default %default]")
+
 )
 
 opt <- parse_args(OptionParser(option_list = option_list))
@@ -295,122 +312,6 @@ merge_overlapping_dmrs <- function(dmrs, win, max_gap_bp = 0, p_seed = 0.05) {
   data.table::rbindlist(merged)
 }
 
-# Detect DMRs using Simes method (bidirectional extension)
-detect_dmrs_simes <- function(win, p_seed, max_gap_bp, min_windows) {
-  res <- list()
-  i <- 1L
-  n <- nrow(win)
-  while (i <= n) {
-    if (win$p[i] > p_seed) {
-      i <- i + 1
-      next
-    }
-    chr <- win$chr[i]
-    direction <- win$direction[i]
-    run_idx <- i
-    
-    # Forward extension
-    j <- i + 1
-    while (j <= n && win$chr[j] == chr && win$direction[j] == direction) {
-      gap <- win$start[j] - win$end[j - 1]
-      if (gap > max_gap_bp) break
-      run_idx <- c(run_idx, j)
-      j <- j + 1
-    }
-    
-    # Backward extension
-    k <- i - 1
-    while (k >= 1 && win$chr[k] == chr && win$direction[k] == direction) {
-      gap <- win$start[i] - win$end[k]
-      if (gap > max_gap_bp) break
-      run_idx <- c(k, run_idx)
-      k <- k - 1
-    }
-    
-    # Compute Simes combined p-value
-    simes_p <- p_simes(win$p[run_idx])
-    if (length(run_idx) >= min_windows && simes_p <= p_seed) {
-      res[[length(res) + 1]] <- list(
-        chr = chr,
-        start = min(win$start[run_idx]),
-        end = max(win$end[run_idx]),
-        n_windows = length(run_idx),
-        direction = direction,
-        combined_p = simes_p
-      )
-    }
-    i <- max(run_idx) + 1
-  }
-  return(data.table::rbindlist(res))
-}
-
-# Detect DMRs using Stouffer method (bidirectional extension)
-detect_dmrs_stouffer <- function(win, p_seed, p_extend, max_gap_bp, min_windows) {
-  res <- list()
-  i <- 1L
-  n <- nrow(win)
-  while (i <= n) {
-    if (win$p[i] > p_seed) {
-      i <- i + 1
-      next
-    }
-    chr <- win$chr[i]
-    direction <- win$direction[i]
-    run_idx <- i
-    
-    # Forward extension
-    j <- i + 1
-    while (j <= n && win$chr[j] == chr && win$direction[j] == direction) {
-      gap <- win$start[j] - win$end[max(run_idx)]
-      if (gap > max_gap_bp) break
-      test_idx <- c(run_idx, j)
-      z_scores <- qnorm(1 - win$p[test_idx])
-      combined_z <- sum(z_scores) / sqrt(length(z_scores))
-      stouffer_p <- 2 * pnorm(-abs(combined_z))
-      if (stouffer_p <= p_extend) {
-        run_idx <- test_idx
-        j <- j + 1
-      } else {
-        break
-      }
-    }
-    
-    # Backward extension
-    k <- i - 1
-    while (k >= 1 && win$chr[k] == chr && win$direction[k] == direction) {
-      gap <- win$start[min(run_idx)] - win$end[k]
-      if (gap > max_gap_bp) break
-      test_idx <- c(k, run_idx)
-      z_scores <- qnorm(1 - win$p[test_idx])
-      combined_z <- sum(z_scores) / sqrt(length(z_scores))
-      stouffer_p <- 2 * pnorm(-abs(combined_z))
-      if (stouffer_p <= p_extend) {
-        run_idx <- test_idx
-        k <- k - 1
-      } else {
-        break
-      }
-    }
-    
-    # Compute final combined p-value
-    z_scores <- qnorm(1 - win$p[run_idx])
-    combined_z <- sum(z_scores) / sqrt(length(z_scores))
-    stouffer_p <- 2 * pnorm(-abs(combined_z))
-    if (length(run_idx) >= min_windows && stouffer_p <= p_extend) {
-      res[[length(res) + 1]] <- list(
-        chr = chr,
-        start = min(win$start[run_idx]),
-        end = max(win$end[run_idx]),
-        n_windows = length(run_idx),
-        direction = direction,
-        combined_p = stouffer_p
-      )
-    }
-    i <- max(run_idx) + 1
-  }
-  return(data.table::rbindlist(res))
-}
-
 # Detect DMRs using Single Seed method (bidirectional extension from single window seed using Stouffer method)
 detect_dmrs_single_seed <- function(win, p_seed, p_extend, max_gap_bp, min_windows, min_delta = 0, 
                                     max_p_degradation = 1.2, max_final_p = 1.0, min_strong_windows = 0.5) {
@@ -646,7 +547,8 @@ detect_dmrs_stouffer_multi_seed <- function(win, p_seed, p_extend, max_gap_bp, m
   return(data.table::rbindlist(res))
 }
 
-detect_dmrs_combined <- function(win, p_seed, p_extend, max_gap_bp, min_windows, min_delta = 0) {
+detect_dmrs_combined <- function(win, p_seed, p_extend, max_gap_bp, min_windows, min_delta = 0,
+                                  max_p_degradation = 1.2, max_final_p = 1.0, min_strong_windows = 0.5) {
   res <- list()
   i <- 1L
   n <- nrow(win)
@@ -700,7 +602,7 @@ detect_dmrs_combined <- function(win, p_seed, p_extend, max_gap_bp, min_windows,
       stouffer_p <- 2 * pnorm(-abs(combined_z))
       
       # P-value degradation check: stop extension if new p-value is worse (larger) than current
-      if (stouffer_p <= p_extend && stouffer_p <= current_stouffer_p * 1.5) {
+      if (stouffer_p <= p_extend && stouffer_p <= current_stouffer_p * max_p_degradation) {
         run_idx <- test_idx
         current_stouffer_p <- stouffer_p  # Update p-value
         j <- j + 1
@@ -727,7 +629,7 @@ detect_dmrs_combined <- function(win, p_seed, p_extend, max_gap_bp, min_windows,
       stouffer_p <- 2 * pnorm(-abs(combined_z))
       
       # P-value degradation check
-      if (stouffer_p <= p_extend && stouffer_p <= current_stouffer_p * 1.5) {
+      if (stouffer_p <= p_extend && stouffer_p <= current_stouffer_p * max_p_degradation) {
         run_idx <- test_idx
         current_stouffer_p <- stouffer_p
         k <- k - 1
@@ -742,16 +644,23 @@ detect_dmrs_combined <- function(win, p_seed, p_extend, max_gap_bp, min_windows,
     combined_z_final <- sum(z_scores_final) / sqrt(length(z_scores_final))
     final_stouffer_p <- 2 * pnorm(-abs(combined_z_final))
     
-    # Add DMR
-    res[[length(res) + 1]] <- list(
-      chr = chr,
-      start = min(win$start[run_idx]),
-      end = max(win$end[run_idx]),
-      n_windows = length(run_idx),
-      direction = direction,
-      simes_p = final_simes_p,
-      stouffer_p = final_stouffer_p
-    )
+    # Quality check: fraction of windows with strong signal
+    strong_windows_frac <- sum(win$p[run_idx] <= p_seed) / length(run_idx)
+    
+    # Add DMR (apply filtering conditions)
+    if (length(run_idx) >= min_windows &&
+        final_stouffer_p <= max_final_p &&
+        strong_windows_frac >= min_strong_windows) {
+      res[[length(res) + 1]] <- list(
+        chr = chr,
+        start = min(win$start[run_idx]),
+        end = max(win$end[run_idx]),
+        n_windows = length(run_idx),
+        direction = direction,
+        combined_p = final_stouffer_p,
+        strong_frac = strong_windows_frac
+      )
+    }
     
     i <- max(run_idx) + 1
   }
@@ -762,27 +671,13 @@ detect_dmrs_combined <- function(win, p_seed, p_extend, max_gap_bp, min_windows,
 #========================= Main Script ==========================================
 win <- load_data(opt$windows)
 
-valid_modes <- c("Simes", "Stouffer", "single_seed", "multi_seed", "hybrid_seed")
+valid_modes <- c("single_seed", "multi_seed", "hybrid_seed")
 if (!opt$`merge-mode` %in% valid_modes) {
   stop(sprintf("Invalid --merge-mode '%s'. Must be one of: %s",
                opt$`merge-mode`, paste(valid_modes, collapse = ", ")))
 }
 
-if (opt$`merge-mode` == "Simes") {
-  dmrs_simes <- detect_dmrs_simes(win, opt$`p-seed`, opt$`max-gap-bp`, opt$`min-windows`)
-  dmrs_simes <- add_delta_summary(dmrs_simes, win)  # Add delta values
-  fwrite(dmrs_simes, sprintf("%s_dmrs_simes.tsv", opt$`out-prefix`), sep = "\t")
-  write_bed(dmrs_simes, sprintf("%s_dmrs_simes.bed", opt$`out-prefix`))  # BED output
-} else if (opt$`merge-mode` == "Stouffer") {
-  dmrs_stouffer <- detect_dmrs_stouffer(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`)
-  if (opt$`post-filter`) {
-    dmrs_stouffer <- post_filter_dmrs(dmrs_stouffer, win, opt$`min-median-p`, 
-                                      opt$`min-consistent-frac`, opt$`p-seed`)
-  }
-  dmrs_stouffer <- add_delta_summary(dmrs_stouffer, win)  # Add delta values
-  fwrite(dmrs_stouffer, sprintf("%s_dmrs_stouffer.tsv", opt$`out-prefix`), sep = "\t")
-  write_bed(dmrs_stouffer, sprintf("%s_dmrs_stouffer.bed", opt$`out-prefix`))  # BED output
-} else if (opt$`merge-mode` == "multi_seed") {
+if (opt$`merge-mode` == "multi_seed") {
   # When using adaptive delta threshold: first detect DMRs with loose conditions
   if (opt$`adaptive-delta`) {
     message("[INFO] Using adaptive delta threshold...")
@@ -845,17 +740,54 @@ if (opt$`merge-mode` == "Simes") {
   fwrite(dmrs_multi_seed, sprintf("%s_dmrs_multi_seed.tsv", opt$`out-prefix`), sep = "\t")
   write_bed(dmrs_multi_seed, sprintf("%s_dmrs_multi_seed.bed", opt$`out-prefix`))
 } else if (opt$`merge-mode` == "hybrid_seed") {
-  dmrs_hybrid_seed <- detect_dmrs_combined(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`, opt$`min-delta`)
+  if (opt$`adaptive-delta`) {
+    message("[INFO] Using adaptive delta threshold...")
+    # Stage 1: detect candidate DMRs with min-delta=0
+    dmrs_initial <- detect_dmrs_combined(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`,
+                                          min_delta = 0, opt$`max-p-degradation`, opt$`max-final-p`, opt$`min-strong-windows`)
+    # Stage 2: compute adaptive threshold from delta distribution of candidate DMRs
+    adaptive_min_delta <- calculate_adaptive_delta_threshold(dmrs_initial, win,
+                                                              method = opt$`adaptive-delta-method`,
+                                                              ratio = opt$`adaptive-delta-ratio`)
+    # Stage 3: re-detect with adaptive threshold
+    dmrs_hybrid_seed <- detect_dmrs_combined(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`,
+                                              adaptive_min_delta, opt$`max-p-degradation`, opt$`max-final-p`, opt$`min-strong-windows`)
+  } else {
+    dmrs_hybrid_seed <- detect_dmrs_combined(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`,
+                                              opt$`min-delta`, opt$`max-p-degradation`, opt$`max-final-p`, opt$`min-strong-windows`)
+  }
   if (opt$`post-filter`) {
     dmrs_hybrid_seed <- post_filter_dmrs(dmrs_hybrid_seed, win, opt$`min-median-p`,
                                          opt$`min-consistent-frac`, opt$`p-seed`)
+  }
+  if (opt$`merge-overlaps`) {
+    dmrs_hybrid_seed <- merge_overlapping_dmrs(
+      dmrs_hybrid_seed,
+      win,
+      max_gap_bp = opt$`merge-overlaps-gap`,
+      p_seed = opt$`p-seed`
+    )
   }
   dmrs_hybrid_seed <- add_delta_summary(dmrs_hybrid_seed, win)  # Add delta values
   fwrite(dmrs_hybrid_seed, sprintf("%s_dmrs_hybrid_seed.tsv", opt$`out-prefix`), sep = "\t")
   write_bed(dmrs_hybrid_seed, sprintf("%s_dmrs_hybrid_seed.bed", opt$`out-prefix`))  # BED output
 } else if (opt$`merge-mode` == "single_seed") {
-  dmrs_single_seed <- detect_dmrs_single_seed(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`, 
-                                              opt$`min-delta`, opt$`max-p-degradation`, opt$`max-final-p`, opt$`min-strong-windows`)
+  if (opt$`adaptive-delta`) {
+    message("[INFO] Using adaptive delta threshold...")
+    # Stage 1: detect candidate DMRs with min-delta=0
+    dmrs_initial <- detect_dmrs_single_seed(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`,
+                                             min_delta = 0, opt$`max-p-degradation`, opt$`max-final-p`, opt$`min-strong-windows`)
+    # Stage 2: compute adaptive threshold from delta distribution of candidate DMRs
+    adaptive_min_delta <- calculate_adaptive_delta_threshold(dmrs_initial, win,
+                                                              method = opt$`adaptive-delta-method`,
+                                                              ratio = opt$`adaptive-delta-ratio`)
+    # Stage 3: re-detect with adaptive threshold
+    dmrs_single_seed <- detect_dmrs_single_seed(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`,
+                                                 adaptive_min_delta, opt$`max-p-degradation`, opt$`max-final-p`, opt$`min-strong-windows`)
+  } else {
+    dmrs_single_seed <- detect_dmrs_single_seed(win, opt$`p-seed`, opt$`p-extend`, opt$`max-gap-bp`, opt$`min-windows`,
+                                                 opt$`min-delta`, opt$`max-p-degradation`, opt$`max-final-p`, opt$`min-strong-windows`)
+  }
   
   # Edge trimming (optional)
   if (opt$`trim-weak-edges`) {
@@ -886,6 +818,14 @@ if (opt$`merge-mode` == "Simes") {
   if (opt$`post-filter`) {
     dmrs_single_seed <- post_filter_dmrs(dmrs_single_seed, win, opt$`min-median-p`, 
                                          opt$`min-consistent-frac`, opt$`p-seed`)
+  }
+  if (opt$`merge-overlaps`) {
+    dmrs_single_seed <- merge_overlapping_dmrs(
+      dmrs_single_seed,
+      win,
+      max_gap_bp = opt$`merge-overlaps-gap`,
+      p_seed = opt$`p-seed`
+    )
   }
   dmrs_single_seed <- add_delta_summary(dmrs_single_seed, win)  # Add delta values
   fwrite(dmrs_single_seed, sprintf("%s_dmrs_single_seed.tsv", opt$`out-prefix`), sep = "\t")
