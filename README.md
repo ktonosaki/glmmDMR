@@ -11,7 +11,7 @@ Core scripts:
 - `prepare_matrix.sh`: build two-group sliding-window matrices.
 - `run_glmmDMR.R`: fit GLMM per window (`binom`/`beta`, `aggregate`/`site`).
 - `DMR_merge.R`: merge significant windows into DMRs.
-  - Supported `--merge-mode`: `Simes`, `Stouffer`, `single_seed`, `multi_seed`, `hybrid_seed`.
+  - Supported `--merge-mode`: `single_seed`, `multi_seed`, `hybrid_seed`.
 - `make_binned_methylation_bigwig.R` (optional): generate binned methylation bigWig.
 - `make_binned_variance_bigwig.py` (optional): generate binned variance bigWig.
 
@@ -212,7 +212,7 @@ Output:
 
 Key options:
 
-- `--merge-mode`: `Simes`, `Stouffer`, `single_seed`, `multi_seed`, `hybrid_seed`
+- `--merge-mode`: `single_seed`, `multi_seed`, `hybrid_seed`
 - `--p-seed`, `--p-extend`, `--min-windows`
 
 Example:
