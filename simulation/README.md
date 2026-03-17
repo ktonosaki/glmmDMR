@@ -1,4 +1,4 @@
-# Tutorial: simulate_sites.R (CG-only)
+# Create simulate data set (CG context)
 
 This tutorial explains what `simulate_sites.R` does, how to run it, what each option means, and what files are produced.
 
