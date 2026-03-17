@@ -7,7 +7,7 @@ suppressMessages(library(rtracklayer))
 
 option_list <- list(
   make_option(c("-i", "--input"), type="character", help="Input gzipped binomial test result (.tsv.gz)"),
-  make_option(c("-b", "--binsize"), type="integer", default=100, help="Bin size in bp [default %default]"),
+  make_option(c("-b", "--binsize"), type="integer", default=50, help="Bin size in bp [default %default]"),
   make_option(c("-o", "--output"), type="character", help="Output bigWig file"),
   make_option("--genome", type="character", help="Genome .chrom.sizes file (chr<tab>size) for BigWig"),
   make_option("--context", type="character", default="CpG", help="Methylation context to use (CpG, CHG, CHH) [default %default]")
@@ -15,14 +15,17 @@ option_list <- list(
 
 opt <- parse_args(OptionParser(option_list=option_list))
 
-#opt$input <- "/home/epigenome/rice_epigenome/parental_methylome/T2T_genome/05.binom_result/KxN_endosperm_rep1.genome1_binomtest_result.tsv.gz"
-#opt$genome <- "/home/epigenome/reference/NIP-T2T/SNP_split/Kas_ref/Kas_n-masked_Mt_Pt.fa.txt"
-#opt$binsize <- 50
-
+# Validate inputs
+if (!file.exists(opt$input)) stop("Input file not found: ", opt$input)
+if (!file.exists(opt$genome)) stop("Genome size file not found: ", opt$genome)
+if (!opt$context %in% c("CpG", "CHG", "CHH")) stop("Invalid context: ", opt$context)
 
 cat("[INFO] Reading input:", opt$input, "\n")
 dt <- fread(cmd = paste("zcat", opt$input), header=TRUE)
+
+# Filter by context
 dt <- dt[context == opt$context]
+if (nrow(dt) == 0) stop("No data found for context: ", opt$context)
 
 # Calculate methylation rate
 dt[, rate := meth / (meth + unmeth)]
@@ -43,23 +46,31 @@ gr <- GRanges(
   ranges = IRanges(start = binned$bin_start + 1, end = binned$bin_end),
   score = binned$avg_rate
 )
-gr
+
 # Load genome size
 cat("[INFO] Loading genome size file:", opt$genome, "\n")
 genome_sizes <- fread(opt$genome, header=FALSE, col.names=c("chr", "size"))
-# 明示的に名前を GRanges に合わせてセットする
-chr_order <- as.character(seqlevels(gr))  # これが gr の順番と同じ
-genome_sizes_matched <- genome_sizes[match(chr_order, genome_sizes$chr)]
+if (nrow(genome_sizes) == 0) stop("Empty genome size file")
 
-# チェック
-if (any(is.na(genome_sizes_matched$size))) {
-  stop("Some chromosomes in GRanges not found in genome size file!")
-}
-# seqlengths に適用
-seqlengths(gr) <- setNames(genome_sizes_matched$size, genome_sizes_matched$chr)
+valid_chr <- genome_sizes$chr
 
-# Sort and export
-gr <- sort(gr)
+# Filter GRanges to chromosomes present in genome size file
+cat("[INFO] Filtering chromosomes...\n")
+orig_n <- length(gr)
+gr <- gr[seqnames(gr) %in% valid_chr]
+cat(sprintf("  Kept %d/%d ranges\n", length(gr), orig_n))
+
+if (length(gr) == 0) stop("No ranges remaining after chromosome filtering")
+
+# Set seqlevels and seqlengths with consistent ordering
+seqlevels(gr) <- valid_chr
+suppressWarnings(seqlengths(gr) <- setNames(genome_sizes$size, valid_chr))
+
+# Trim ranges exceeding chromosome boundaries
+gr <- trim(gr)
+
+# Sort and export (suppress mitochondrial boundary warnings)
+gr <- suppressWarnings(sort(gr))
 cat("[INFO] Exporting BigWig to:", opt$output, "\n")
-rtracklayer::export.bw(gr, opt$output)
+suppressWarnings(rtracklayer::export.bw(gr, opt$output))
 cat("[INFO] Done.\n")
