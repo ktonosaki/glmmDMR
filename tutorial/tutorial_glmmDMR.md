@@ -1,8 +1,8 @@
 # glmmDMR Tutorial (Detailed Reference)
 
-このドキュメントは、glmmDMR の各スクリプトで実行している処理内容、主要オプション、入出力ファイル形式を実務向けに整理した詳細リファレンスです。
+This document is a practical, detailed reference for glmmDMR, covering what each script does, key options, and input/output formats.
 
-対象スクリプト:
+Target scripts:
 - `summarize_extractor.py`
 - `BinomTest.py`
 - `prepare_matrix.sh`
@@ -13,22 +13,22 @@
 
 ## 1. Pipeline Summary
 
-標準フロー:
-1. 上流で Bismark による methylation extraction を実行
-2. `summarize_extractor.py` で site 集計
-3. `BinomTest.py` で site フィルタ
-4. `prepare_matrix.sh` で window matrix 生成
-5. `run_glmmDMR.R` で window-level GLMM 推定
-6. `DMR_merge.R` で DMR 統合
-7. 必要に応じて bigWig 可視化
+Standard workflow:
+1. Run methylation extraction with Bismark (upstream)
+2. Summarize sites with `summarize_extractor.py`
+3. Filter sites with `BinomTest.py`
+4. Build a window matrix with `prepare_matrix.sh`
+5. Estimate window-level GLMM statistics with `run_glmmDMR.R`
+6. Integrate windows into DMRs with `DMR_merge.R`
+7. Optionally generate bigWig tracks for visualization
 
-実行単位の目安:
-- ステップ 2〜3（= Section 3.1〜3.2）は「サンプルごと」に実行します。
-- ステップ 4（= Section 3.3）で、複数サンプルの結果を群ごとにまとめて統合します。
+Execution unit guide:
+- Steps 2-3 (Sections 3.1-3.2) are run per sample.
+- Step 4 (Section 3.3) integrates multiple sample outputs by group.
 
 ## 2. Upstream analysis example (before glmmDMR)
 
-以下は、`glmmDMR` に入力する前段でよく使う Bismark ベースの最小例です。
+Below is a minimal Bismark-based upstream example commonly used before feeding data into glmmDMR.
 
 ```bash
 bismark \
@@ -62,23 +62,22 @@ bismark_methylation_extractor \
   align/sample.Q42.deduplicated.bam
 ```
 
-この出力（`CpG_*.txt.gz`, `CHG_*.txt.gz`, `CHH_*.txt.gz`）を、次節の `summarize_extractor.py` に入力します。
-
+Use these outputs (`CpG_*.txt.gz`, `CHG_*.txt.gz`, `CHH_*.txt.gz`) as input to `summarize_extractor.py` in the next section.
 
 ## 3. Script-by-Script Details
 
 ## 3.1 `summarize_extractor.py`
-- 入力ディレクトリ内の `CpG_*.txt.gz`, `CHG_*.txt.gz`, `CHH_*.txt.gz` を走査し、site ごとに合算して、context ごとに一時 TSV を作成後、全 context を結合して最終 `tsv.gz` を出力。
+- Scans `CpG_*.txt.gz`, `CHG_*.txt.gz`, and `CHH_*.txt.gz` in the input directory, aggregates counts per site, writes temporary TSV files per context, then merges all contexts into a final `tsv.gz` file.
 
 Options:
-- `-i, --input` (required): extractor 出力ディレクトリ
-- `-o, --output` (required): 出力 `*.tsv.gz`
-- `--threads` (default: 4): 並列処理スレッド数
-- `--keep-temp`: context 別一時ファイルを保持
+- `-i, --input` (required): extractor output directory
+- `-o, --output` (required): output `*.tsv.gz`
+- `--threads` (default: 4): number of worker threads
+- `--keep-temp`: keep context-specific temporary files
 
 Input format:
-- 各行に Bismark extractor 5列相当を含む `*.txt.gz`
-- 想定列: read_id, strand, chr, pos, code
+- `*.txt.gz` files containing Bismark extractor-like 5-column records
+- Expected columns: read_id, strand, chr, pos, code
 
 Output format (`*_summarized_output.tsv.gz`):
 - `chr` (string)
@@ -97,20 +96,20 @@ python summarize_extractor.py \
 ```
 
 ## 3.2 `BinomTest.py`
-site 単位で binomial test + BH-FDR 補正を行い、低信頼シグナルを抑制。非有意 site は0に置換する。
+Performs site-level binomial testing with BH-FDR correction to suppress low-confidence signals. Non-significant sites are zeroed.
 
 Options:
-- `-i, --input` (required): summarize_extractor 出力
-- `-o, --output` (required): 出力 `*.tsv.gz`
-- `--nonconv_chr` (default: None): 非変換率推定に使う染色体（基本はこちらを推奨）
-- `--null_prob` (default: None): 帰無確率（`--nonconv_chr` が使えない場合に、事前計算した値を指定）
-- `--fdr_threshold` (default: 0.05): FDR 閾値
-- `--min_coverage` (default: 0): 最低 coverage
-- `--threads` (default: 4): 並列数
+- `-i, --input` (required): summarize_extractor output
+- `-o, --output` (required): output `*.tsv.gz`
+- `--nonconv_chr` (default: None): chromosome used to estimate non-conversion rate (recommended when available)
+- `--null_prob` (default: None): null probability (use when `--nonconv_chr` cannot be used)
+- `--fdr_threshold` (default: 0.05): FDR threshold
+- `--min_coverage` (default: 0): minimum coverage
+- `--threads` (default: 4): number of workers
 
 Recommended usage for null probability:
-- 基本運用: `--nonconv_chr` を指定して、非変換コントロール染色体から `null_prob` を推定する。
-- 代替運用: 非変換コントロールがない場合は、外部で計算した `null_prob` を `--null_prob` に明示指定して実行する。
+- Preferred: set `--nonconv_chr` and estimate `null_prob` from a non-conversion control chromosome.
+- Alternative: if no non-conversion control is available, provide a precomputed value via `--null_prob`.
 
 Output format (`*_binomtest_result.tsv.gz`):
 - `chr, pos, strand, meth, unmeth, context`
@@ -126,7 +125,7 @@ python BinomTest.py \
   --threads 4
 ```
 
-Example (without nonconv control chromosome; use precomputed null_prob):
+Example (without non-conversion control chromosome; use precomputed null_prob):
 ```bash
 python BinomTest.py \
   -i matrix/sample_summarized_output.tsv.gz \
@@ -140,39 +139,38 @@ python BinomTest.py \
 ## 3.3 `prepare_matrix.sh`
 
 Purpose:
-- 2群比較用の sliding-window matrix を context 別に生成。
-- Section 3.1〜3.2 で各サンプルごとに作成した `*_binomtest_result.tsv.gz` を、ここで `--group1` / `--group2` にまとめて渡して統合します。
+- Generates context-specific sliding-window matrices for two-group comparison.
+- Takes per-sample `*_binomtest_result.tsv.gz` files from Sections 3.1-3.2 and integrates them via `--group1` and `--group2`.
 
 Options:
-- `--fasta` (required): FASTA または FAI
-- `--group1` (required): group1 の BinomTest 出力 TSV.gz 群（複数指定）
-- `--group2` (required): group2 の BinomTest 出力 TSV.gz 群（複数指定）
-- `--group_labels` (default: `group1 group2`): 群名
-- `--window` (default: 300): window 幅
-- `--slide` (default: 200): slide 幅
-- `--output` (default: `./matrix_out`): 出力ディレクトリ
-- `--tmpdir`: 一時ディレクトリ
-
+- `--fasta` (required): FASTA or FAI
+- `--group1` (required): group1 BinomTest TSV.gz files (multiple allowed)
+- `--group2` (required): group2 BinomTest TSV.gz files (multiple allowed)
+- `--group_labels` (default: `group1 group2`): group names
+- `--window` (default: 300): window size
+- `--slide` (default: 200): slide size
+- `--output` (default: `./matrix_out`): output directory
+- `--tmpdir`: temporary directory
 
 Output format (`<g1>_<g2>_<ctx>_matrix.tsv.gz`):
-- 列順は `bedtools intersect -wa -wb` 由来の固定13列
-- 実質内容: window座標 + site座標/群/sample/strand/meth/unmeth/coverage
+- Fixed 13-column layout derived from `bedtools intersect -wa -wb`
+- Effective content: window coordinates + site coordinates/group/sample/strand/meth/unmeth/coverage
 
-Example (2 samples total by group):
+Example (2 samples per group):
 ```bash
 bash prepare_matrix.sh \
   --fasta /path/to/TAIR10.fasta \
   --group1 binom/WT_1_binomtest_result.tsv.gz \
            binom/WT_2_binomtest_result.tsv.gz \
   --group2 binom/MT_1_binomtest_result.tsv.gz \
-  binom/MT_2_binomtest_result.tsv.gz \
+           binom/MT_2_binomtest_result.tsv.gz \
   --group_labels WT MT \
   --window 500 \
   --slide 300 \
   --output prep_out
 ```
 
-Example (4 samples total by group):
+Example (4 samples per group):
 ```bash
 bash prepare_matrix.sh \
   --fasta /path/to/TAIR10.fasta \
@@ -181,8 +179,8 @@ bash prepare_matrix.sh \
            binom/WT_1_binomtest_result.tsv.gz \
            binom/WT_2_binomtest_result.tsv.gz \
   --group2 binom/MT_1_binomtest_result.tsv.gz \
-           binom/MT_2_binomtest_result.tsv.gz \ 
-           binom/MT_1_binomtest_result.tsv.gz \ 
+           binom/MT_2_binomtest_result.tsv.gz \
+           binom/MT_1_binomtest_result.tsv.gz \
            binom/MT_2_binomtest_result.tsv.gz \
   --group_labels WT MT \
   --window 500 \
@@ -191,35 +189,34 @@ bash prepare_matrix.sh \
 ```
 
 ## 3.4 `run_glmmDMR.R`
-- window 単位で GLMM を当てて p 値、delta、要約統計を推定。モデルを選択できるがbeta familyモデルsiteモードが最も正確性が高い。context, coverage, site数, replicate 数で段階フィルタ。必要に応じて `prefilter_delta` で高速事前除外も可能。
-
+- Fits GLMMs per window and estimates p-values, delta, and summary statistics. While multiple settings are available, `beta` family with `site` mode generally provides the highest accuracy. Stage-wise filtering by context, coverage, site count, and replicate count is supported. Optional `prefilter_delta` can accelerate computation by removing low-effect windows before fitting.
 
 Options:
 
 Input / Output:
-- `-i, --infile` (required): 入力 matrix
-- `-o, --out_prefix` (required): 出力 prefix
+- `-i, --infile` (required): input matrix
+- `-o, --out_prefix` (required): output prefix
 
 Data selection:
-- `-c, --context` (default: NULL): context フィルタ（`CpG`/`CHG`/`CHH`）
-- `--group1`, `--group2` (required): 比較群ラベル
+- `-c, --context` (default: NULL): context filter (`CpG`/`CHG`/`CHH`)
+- `--group1`, `--group2` (required): comparison group labels
 
 Model:
-- `--family` (default: `beta`): `binom` または `beta`（`beta` + `site` が最も精度が高い）
-- `--mode` (default: `site`): `aggregate`（window 集計値）または `site`（site 単位）
-- `--random_effect` (default: TRUE): `(1|sample)` ランダム効果を使用
+- `--family` (default: `beta`): `binom` or `beta` (`beta` + `site` is generally most accurate)
+- `--mode` (default: `site`): `aggregate` (window-level summary) or `site` (site-level model)
+- `--random_effect` (default: TRUE): use random effect `(1|sample)`
 
-Pre-filter（GLMM 投入前の絞り込み）:
-- `--min_reps_g1`, `--min_reps_g2` (default: 2): 群ごとの最小 replicate 数
-- `--min_cov` (default: 0): site coverage フィルタ
-- `--min_sites_win` (default: 0): window 内最小 site 数
-- `--prefilter_delta` (default: 0): delta が小さい window を事前除外（高速化）
+Pre-filter (before GLMM fitting):
+- `--min_reps_g1`, `--min_reps_g2` (default: 2): minimum replicates per group
+- `--min_cov` (default: 0): site coverage filter
+- `--min_sites_win` (default: 0): minimum sites per window
+- `--prefilter_delta` (default: 0): pre-remove windows with small delta (for speed)
 
 Computation:
-- `--workers` (default: 4): 並列 worker 数
-- `--batches` (default: 50): 分割バッチ数
-- `--max_globals_mb` (default: 1000): future global size 上限（MB）
-- `--seed` (default: 1): 乱数 seed
+- `--workers` (default: 4): worker count
+- `--batches` (default: 50): number of batches
+- `--max_globals_mb` (default: 1000): future globals size limit (MB)
+- `--seed` (default: 1): random seed
 
 Output format (`*_fit_<family>_<mode>.tsv.gz`):
 - `chr`
@@ -250,64 +247,63 @@ Rscript run_glmmDMR.R \
 
 ## 3.5 `DMR_merge.R`
 
-- window-level 有意シグナルを統合して DMR を構築。以下の３つのモードを実装している。
+- Integrates window-level significant signals into DMRs using the following three modes.
 
 Supported merge modes:
-- `single_seed`: 強い単独 seed window を起点に extension して DMR を構築する、保守的で解釈しやすいモード。
-- `multi_seed`: 有意 seed を複数含む領域を優先して連結するモードで、複数ピークを含む領域に強い。
-- `hybrid_seed`: `multi_seed` を優先し、未カバー領域を `single_seed` で補完するハイブリッド方式。
+- `single_seed`: starts from a strong single seed window and extends, conservative and easy to interpret.
+- `multi_seed`: prioritizes linking regions containing multiple significant seed windows; strong for multi-peak regions.
+- `hybrid_seed`: prioritizes `multi_seed` and complements uncovered regions with `single_seed`.
 
 Options:
 
 Input / Output:
-- `--windows` (required): GLMM window 結果ファイル（`*_fit_<family>_<mode>.tsv.gz`）
-- `--out-prefix` (default: `results/dmr`): 出力 prefix
+- `--windows` (required): GLMM window results (`*_fit_<family>_<mode>.tsv.gz`)
+- `--out-prefix` (default: `results/dmr`): output prefix
 
 Mode:
-- `--merge-mode` (default: `hybrid_seed`): 上記3種のみ有効
+- `--merge-mode` (default: `hybrid_seed`): only the three modes above are valid
 
-Seed / Extension（検出コアパラメータ）:
-- `--p-seed` (default: 0.05): seed 判定に使う p 閾値
-- `--p-extend` (default: 0.05): extension の許容 p 閾値
-- `--max-gap-bp` (default: 200): 隣接 window を同一候補として連結する最大ギャップ
-- `--min-windows` (default: 1): DMR として採用する最小 window 数
-- `--min-delta` (default: 0): extension 時の最小効果量しきい値
-- `--max-p-degradation` (default: 1.2): extension 中に許容する p 値の悪化倍率（1.0 = 悪化禁止）
-- `--max-final-p` (default: 1.0): 最終 DMR の combined p 上限
-- `--min-strong-windows` (default: 0.5): 最終 DMR 内で p <= p-seed となる window の最小割合
+Seed / Extension (core detection parameters):
+- `--p-seed` (default: 0.05): p-value threshold for seed windows
+- `--p-extend` (default: 0.05): p-value threshold for extension
+- `--max-gap-bp` (default: 200): max gap to connect neighboring windows into one candidate
+- `--min-windows` (default: 1): minimum windows required to report a DMR
+- `--min-delta` (default: 0): minimum effect size threshold during extension
+- `--max-p-degradation` (default: 1.2): allowed p-value worsening factor during extension (1.0 = no worsening)
+- `--max-final-p` (default: 1.0): upper bound of final DMR combined p-value
+- `--min-strong-windows` (default: 0.5): minimum fraction of windows with p <= p-seed in the final DMR
 
-Adaptive delta threshold（効果量しきい値の自動調整）:
-- `--adaptive-delta`: 2段階検出で delta しきい値をデータから自動決定する
-- `--adaptive-delta-method` (default: `median_ratio`): しきい値算出方法（`median_ratio`, `q50`, `q25`, `q10`, `mad`）
-- `--adaptive-delta-ratio` (default: 0.6): `median_ratio` 時の比率
+Adaptive delta threshold (automatic effect-size thresholding):
+- `--adaptive-delta`: enable two-stage detection with data-driven delta thresholding
+- `--adaptive-delta-method` (default: `median_ratio`): threshold method (`median_ratio`, `q50`, `q25`, `q10`, `mad`)
+- `--adaptive-delta-ratio` (default: 0.6): ratio used in `median_ratio`
 
-補足:
-- `adaptive-delta` は `multi_seed`、またはそれを内部で実行する `hybrid_seed` で使うと、精度向上の傾向が見られます。
-- `method` ではデータ分布に応じて分位点（`q50`, `q25`, `q10` など）を指定できます。
-- `ratio` では割合を直接指定してしきい値を調整できます。
-- 初期設定としては `q25`（おおよそ 25%）の利用を推奨します。
+Notes:
+- Using `adaptive-delta` in `multi_seed`, or in `hybrid_seed` (which runs `multi_seed` internally), often improves detection quality.
+- In `method`, you can choose quantile-based thresholds (`q50`, `q25`, `q10`, etc.) based on data distribution.
+- In `ratio`, you can directly control the threshold scaling.
+- As an initial setting, `q25` (about 25%) is recommended.
 
 Multi-seed specific:
-- `--seed-min-windows` (default: 1): multi-seed の seed 構成に必要な最小 window 数（`multi_seed`, `hybrid_seed` で使用）
+- `--seed-min-windows` (default: 1): minimum seed windows for `multi_seed` and `hybrid_seed`
 
-Post-filter（検出後の整合性チェック）:
-- `--post-filter`: 候補 DMR の品質フィルタを有効化
-- `--min-median-p` (default: 0.01): DMR 内 window の median p 上限（post-filter 判定）
-- `--min-consistent-frac` (default: 0.5): p <= p-seed となる window の最小割合（post-filter 判定）
+Post-filter (consistency checks after detection):
+- `--post-filter`: enable quality filtering of candidate DMRs
+- `--min-median-p` (default: 0.01): median p-value upper bound within a DMR (post-filter criterion)
+- `--min-consistent-frac` (default: 0.5): minimum fraction of windows with p <= p-seed (post-filter criterion)
 
 Length / median-p filters:
-- `--min-dmr-length` (default: 0): 最終 DMR 長の下限（bp）
-- `--max-median-p` (default: 1.0): DMR 内 window の median p 上限（独立フィルタ）
+- `--min-dmr-length` (default: 0): minimum final DMR length (bp)
+- `--max-median-p` (default: 1.0): independent filter on DMR median p-value
 
-Overlap merge（検出後の再マージ）:
-- `--merge-overlaps`: 同方向 DMR の重なり/近接を再マージ
-- `--merge-overlaps-gap` (default: 0): 再マージ時に許容する DMR 間ギャップ（bp）
+Overlap merge (post-detection re-merge):
+- `--merge-overlaps`: re-merge overlapping/nearby same-direction DMRs
+- `--merge-overlaps-gap` (default: 0): allowed gap between DMRs during re-merge
 
-
-Output format (mode別):
+Output format (by mode):
 - TSV: `*_dmrs_<mode>.tsv`
 - BED: `*_dmrs_<mode>.bed`
-- 主な列: `chr,start,end,n_windows,direction,combined_p`
+- Main columns: `chr,start,end,n_windows,direction,combined_p`
 
 Example:
 ```bash
@@ -322,12 +318,12 @@ Rscript DMR_merge.R \
 
 ## 3.6 `make_binned_methylation_bigwig.R` (optional)
 
-- site methylation （BinomTest 出力 TSV.gz）から bin ごとの平均 methylation を bigWig 化。
+- Converts site-level methylation (BinomTest TSV.gz output) into bin-wise mean methylation bigWig.
 
 Options:
-- `-i, --input` (required): binomtest 結果
-- `-b, --binsize` (default: 50): bin 幅
-- `-o, --output` (required): 出力 bigWig
+- `-i, --input` (required): BinomTest result
+- `-b, --binsize` (default: 50): bin size
+- `-o, --output` (required): output bigWig
 - `--genome` (required): chrom.sizes
 - `--context` (default: `CpG`): `CpG/CHG/CHH`
 
@@ -342,17 +338,17 @@ Rscript make_binned_methylation_bigwig.R \
 ```
 
 ## 3.7 `make_binned_variance_bigwig.py` (optional)
-複数 bigWig の bin 平均値から replicate 間分散を計算して bigWig 化。必要なら `--norm log2p1` オプションで正規化も可能
+Computes replicate variance from bin-averaged values across multiple bigWig tracks and writes a variance bigWig. Optional normalization with `--norm log2p1` is available.
 
 Options:
-- `--inputs` (required): 入力 bigWig 群
-- `--output` (required): 出力 bigWig
+- `--inputs` (required): input bigWig files
+- `--output` (required): output bigWig
 - `--bin-size` (default: 200)
 - `--min-tracks` (default: 2)
 - `--norm` (default: `none`): `none` or `log2p1`
 
 Output format:
-- bigWig スコア = bin ごとの track 間分散
+- bigWig score = per-bin variance across tracks
 
 Example:
 ```bash
@@ -367,16 +363,15 @@ python make_binned_variance_bigwig.py \
   --norm none
 ```
 
-
 ## 4. Troubleshooting
 
 1) No windows after filtering
-- 原因: `--min_cov`, `--min_sites_win`, replicate 条件が厳しすぎる
-- 対応: 閾値を段階的に緩める
+- Cause: thresholds such as `--min_cov`, `--min_sites_win`, or replicate conditions are too strict.
+- Action: relax thresholds stepwise.
 
-2) GLMM が遅い / メモリ不足
-- 対応: `--workers` を下げる、`--batches` を増やす、`TMPDIR` を高速かつ容量十分な場所へ
+2) GLMM is slow / out of memory
+- Action: reduce `--workers`, increase `--batches`, and set `TMPDIR` to a fast location with sufficient capacity.
 
-3) bigWig 生成で chromosome mismatch
-- 原因: 入力 chr 名と chrom.sizes の不一致
-- 対応: naming を統一して再実行
+3) Chromosome mismatch during bigWig generation
+- Cause: chromosome names in inputs and chrom.sizes are inconsistent.
+- Action: harmonize naming and rerun.
