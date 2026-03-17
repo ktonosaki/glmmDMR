@@ -14,7 +14,7 @@ suppressPackageStartupMessages({
 opt_list <- list(
   make_option(c("-i","--infile"), type="character", help="input matrix (tsv[.gz]) with fixed columns"),
   make_option(c("-o","--out_prefix"), type="character", help="output prefix (dir/prefix)"),
-  make_option(c("-c","--context"), type="character", default=NULL, help="filter by context (e.g., CG / CHG / CHH). NULL=use all"),
+  make_option(c("-c","--context"), type="character", default=NULL, help="filter by context (e.g., CG or CpG / CHG / CHH). NULL=use all"),
   make_option("--group1", type="character", help="name of group1 (e.g., WT)"),
   make_option("--group2", type="character", help="name of group2 (e.g., MT)"),
   make_option("--min_reps_g1", type="integer", default=2, help="minimum #replicates in group1 [default %default]"),
