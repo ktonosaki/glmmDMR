@@ -25,7 +25,6 @@ option_list <- list(
   make_option(c("--mu_site_sd"), type="double", default=0.0,
               help="SD of random effect added to per-site mean methylation rate mu"),
   make_option(c("--rho"), type="double", default=0.05, help="Beta-binomial overdispersion strength (smaller = stronger)"),
-  make_option(c("--zeta_CHH"), type="double", default=0.40, help="Zero-inflation rate for CHH context"),
   make_option(c("--logcov_mu"), type="double", default=log(20)),
   make_option(c("--logcov_sd"), type="double", default=0.5),
   make_option(c("--miss_rate"), type="double", default=0.10, help="Probability of missing data for each site"),
@@ -186,14 +185,8 @@ if (opt$miss_rate>0) cov[runif(length(cov)) < opt$miss_rate] <- 0L
 keep <- cov >= opt$min_cov
 SS <- SS[keep]; mu <- mu[keep]; cov <- cov[keep]; noise_factor <- noise_factor[keep]
 
-# Generate methylation counts (zero-inflation for CHH only)
-use_zi <- identical(ctx,"CHH")
+# Generate methylation counts
 meth <- unmeth <- rep(NA_integer_, nrow(SS))
-if (use_zi) {
-  zi <- runif(nrow(SS)) < opt$zeta_CHH
-  meth[zi]   <- 0L
-  unmeth[zi] <- cov[zi]
-}
 
 # Vary rho per site, further reduce in DMR periphery
 rho_site <- rlnorm(nrow(SS), meanlog=log(opt$rho), sdlog=0.15)
