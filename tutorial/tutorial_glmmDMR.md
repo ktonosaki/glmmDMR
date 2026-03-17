@@ -281,16 +281,21 @@ Adaptive delta threshold（効果量しきい値の自動調整）:
 - `--adaptive-delta-method` (default: `median_ratio`): しきい値算出方法（`median_ratio`, `q50`, `q25`, `q10`, `mad`）
 - `--adaptive-delta-ratio` (default: 0.6): `median_ratio` 時の比率
 
+補足:
+- `adaptive-delta` は `multi_seed`、またはそれを内部で実行する `hybrid_seed` で使うと、精度向上の傾向が見られます。
+- `method` ではデータ分布に応じて分位点（`q50`, `q25`, `q10` など）を指定できます。
+- `ratio` では割合を直接指定してしきい値を調整できます。
+- 初期設定としては `q25`（おおよそ 25%）の利用を推奨します。
+
 Multi-seed specific:
-- `--seed-min-windows` (default: 1): multi-seed の seed 構成に必要な最小 window 数（`multi_seed` のみ）
+- `--seed-min-windows` (default: 1): multi-seed の seed 構成に必要な最小 window 数（`multi_seed`, `hybrid_seed` で使用）
 
 Post-filter（検出後の整合性チェック）:
 - `--post-filter`: 候補 DMR の品質フィルタを有効化
 - `--min-median-p` (default: 0.01): DMR 内 window の median p 上限（post-filter 判定）
 - `--min-consistent-frac` (default: 0.5): p <= p-seed となる window の最小割合（post-filter 判定）
 
-Edge / length / median-p filters:
-- `--trim-weak-edges`: DMR 両端の弱い window（p > p-extend）を削る
+Length / median-p filters:
 - `--min-dmr-length` (default: 0): 最終 DMR 長の下限（bp）
 - `--max-median-p` (default: 1.0): DMR 内 window の median p 上限（独立フィルタ）
 
@@ -298,30 +303,11 @@ Overlap merge（検出後の再マージ）:
 - `--merge-overlaps`: 同方向 DMR の重なり/近接を再マージ
 - `--merge-overlaps-gap` (default: 0): 再マージ時に許容する DMR 間ギャップ（bp）
 
-Mode-wise option quick reference:
-
-| Option group | single_seed | multi_seed | hybrid_seed |
-|---|---|---|---|
-| Base (`--p-seed`, `--max-gap-bp`, `--min-windows`) | yes | yes | yes |
-| Extension threshold (`--p-extend`) | yes | yes | yes |
-| Post-filter (`--post-filter`, `--min-median-p`, `--min-consistent-frac`) | yes | yes | yes |
-| Delta threshold (`--min-delta`) | yes | yes | yes |
-| Adaptive delta (`--adaptive-delta*`) | yes | yes | yes |
-| Seed quality (`--max-p-degradation`, `--max-final-p`, `--min-strong-windows`) | yes | yes | yes |
-| Edge/length/median filters (`--trim-weak-edges`, `--min-dmr-length`, `--max-median-p`) | yes | yes | yes |
-| Overlap merge (`--merge-overlaps`, `--merge-overlaps-gap`) | yes | yes | yes |
-| Multi-seed seed size (`--seed-min-windows`) | no | yes | no |
-
-`--adaptive-delta*` = `--adaptive-delta`, `--adaptive-delta-method`, `--adaptive-delta-ratio`.
-
-Input format:
-- 必須列: `chr, start, end, p, delta`
 
 Output format (mode別):
 - TSV: `*_dmrs_<mode>.tsv`
 - BED: `*_dmrs_<mode>.bed`
 - 主な列: `chr,start,end,n_windows,direction,combined_p`
-- mode により `strong_frac`, `delta_mean/delta_max` が付加
 
 Example:
 ```bash
@@ -356,20 +342,7 @@ Rscript make_binned_methylation_bigwig.R \
 ```
 
 ## 3.7 `make_binned_variance_bigwig.py` (optional)
-
-Purpose:
-- 複数 bigWig の bin 平均値から replicate 間分散を計算して bigWig 化。
-
-Note:
-- Python script。`python` で実行してください。
-
-Core processing:
-1. 入力 bigWig 群を同一 header 前提で読み込み。
-2. 各 chromosome を bin 化して track ごとの平均値配列を取得。
-3. 必要なら `log2p1` 正規化。
-4. bin ごとに分散を計算。
-5. `min-tracks` 未満の bin は NA として除外。
-6. 出力 bigWig へ書き込み。
+複数 bigWig の bin 平均値から replicate 間分散を計算して bigWig 化。必要なら `--norm log2p1` オプションで正規化も可能
 
 Options:
 - `--inputs` (required): 入力 bigWig 群
@@ -384,7 +357,10 @@ Output format:
 Example:
 ```bash
 python make_binned_variance_bigwig.py \
-  --inputs wig/rep1_CpG.bw wig/rep2_CpG.bw wig/rep3_CpG.bw wig/rep4_CpG.bw \
+  --inputs wig/rep1_CpG.bw \
+           wig/rep2_CpG.bw \
+           wig/rep3_CpG.bw \
+           wig/rep4_CpG.bw \
   --output wig/group_CpG.variance.bw \
   --bin-size 200 \
   --min-tracks 2 \
