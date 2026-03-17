@@ -1,6 +1,9 @@
 
 ## glmmDMR
-A sliding-window strategy was used to partition DNA methylation data into fixed-size windows, and a generalized linear mixed model (GLMM) was applied with methylated cytosine counts in each window as the response variable. By modeling the comparison target as a fixed effect while accounting for biological replicates, the framework estimates window-level methylation differences and statistical significance while incorporating between-replicate variability. In addition, to construct DMRs from windows judged significant, two integration methods were implemented: (i) a Multi-seed approach that statistically combines multiple adjacent moderate signals, and (ii) a Single-seed approach that starts from a strongly significant single window and expands the region.
+glmmDMR partitions DNA methylation data into fixed-size sliding windows and applies a generalized linear mixed model (GLMM) with methylated cytosine counts per window as the response variable. By modeling the comparison target as a fixed effect while accounting for biological replicates, the framework estimates window-level methylation differences and statistical significance while incorporating between-replicate variability. To construct DMRs from significant windows, three integration modes are implemented: (i) `multi_seed`, which statistically combines multiple adjacent moderate signals, (ii) `single_seed`, which starts from a strongly significant single window and expands the region, and (iii) `hybrid_seed`, which prioritizes `multi_seed` and complements uncovered regions with `single_seed`.
+
+Quick link:
+- Detailed tutorial: [tutorial/tutorial_glmmDMR.md](tutorial/tutorial_glmmDMR.md)
 
 ## 1. Repository Contents
 
@@ -193,9 +196,9 @@ Rscript run_glmmDMR.R \
   -o glmm_out/WT_MT_CpG \
   --group1 WT --group2 MT \
   --family beta \
-  --mode aggregate \
+  --mode site \
   --min_reps_g1 2 --min_reps_g2 2 \
-  --min_sites_win 1 --min_cov 5 \
+  --min_sites_win 3 --min_cov 5 \
   --random_effect \
   --workers 8 --batches 200
 ```
@@ -210,10 +213,65 @@ Output:
 
 - DMR TSV files and BED files
 
-Key options:
+Supported merge modes:
 
-- `--merge-mode`: `single_seed`, `multi_seed`, `hybrid_seed`
-- `--p-seed`, `--p-extend`, `--min-windows`
+- `single_seed`: start from a strong seed window and extend conservatively.
+- `multi_seed`: prioritize regions that include multiple significant seed windows.
+- `hybrid_seed`: run `multi_seed` first, then complement uncovered regions with `single_seed`.
+
+Options by group:
+
+Input / Output:
+
+- `--windows` (required): input GLMM window result (`*_fit_<family>_<mode>.tsv.gz`)
+- `--out-prefix` (default: `results/dmr`): output prefix
+
+Mode:
+
+- `--merge-mode` (default: `hybrid_seed`): `single_seed`, `multi_seed`, `hybrid_seed`
+
+Seed / Extension:
+
+- `--p-seed` (default: `0.05`): seed significance threshold
+- `--p-extend` (default: `0.05`): extension threshold
+- `--max-gap-bp` (default: `200`): maximum gap to connect adjacent windows
+- `--min-windows` (default: `1`): minimum windows required for a DMR
+- `--min-delta` (default: `0`): minimum effect size for extension
+- `--max-p-degradation` (default: `1.2`): allowed p-value worsening during extension (`1.0` disables worsening)
+- `--max-final-p` (default: `1.0`): maximum combined p-value of final DMR
+- `--min-strong-windows` (default: `0.5`): minimum fraction of windows with `p <= p-seed`
+
+Adaptive delta threshold:
+
+- `--adaptive-delta`: enable automatic effect-size thresholding
+- `--adaptive-delta-method` (default: `median_ratio`): `median_ratio`, `q50`, `q25`, `q10`, `mad`
+- `--adaptive-delta-ratio` (default: `0.6`): ratio used for `median_ratio`
+
+Adaptive delta usage note:
+
+- `--adaptive-delta` is most useful in `multi_seed` or `hybrid_seed` workflows.
+- Quantile methods (`q50`, `q25`, `q10`) can be selected based on data distribution.
+- `q25` is a practical starting point for initial tuning.
+
+Multi-seed specific:
+
+- `--seed-min-windows` (default: `1`): minimum seed windows for `multi_seed` and `hybrid_seed`
+
+Post-filter:
+
+- `--post-filter`: enable post-detection DMR quality filtering
+- `--min-median-p` (default: `0.01`): median p-value cutoff in post-filter
+- `--min-consistent-frac` (default: `0.5`): minimum fraction with `p <= p-seed` in post-filter
+
+Length / median-p filters:
+
+- `--min-dmr-length` (default: `0`): minimum final DMR length (bp)
+- `--max-median-p` (default: `1.0`): independent median p-value filter
+
+Overlap merge:
+
+- `--merge-overlaps`: re-merge overlapping/nearby DMRs with the same direction
+- `--merge-overlaps-gap` (default: `0`): gap allowed for overlap re-merge
 
 Example:
 
