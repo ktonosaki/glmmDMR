@@ -6,23 +6,23 @@ A sliding-window strategy was used to partition DNA methylation data into fixed-
 
 Core scripts:
 
-- summarize_extractor.py: summarize Bismark extractor output (`*.txt.gz`) into per-site counts.
-- BinomTest.py: per-site binomial test with FDR-based filtering behavior.
-- prepare_matrix.sh: build two-group sliding-window matrices.
-- run_glmmDMR.R: fit GLMM per window (`binom`/`beta`, `aggregate`/`site`).
-- DMR_merge.R: merge significant windows into DMRs.
+- `summarize_extractor.py`: summarize Bismark extractor output (`*.txt.gz`) into per-site counts.
+- `BinomTest.py`: per-site binomial test with FDR-based filtering behavior.
+- `prepare_matrix.sh`: build two-group sliding-window matrices.
+- `run_glmmDMR.R`: fit GLMM per window (`binom`/`beta`, `aggregate`/`site`).
+- `DMR_merge.R`: merge significant windows into DMRs.
   - Supported `--merge-mode`: `Simes`, `Stouffer`, `single_seed`, `multi_seed`, `hybrid_seed`.
-- make_binned_methylation_bigwig.R (optional): generate binned methylation bigWig.
-- make_binned_variance_bigwig.R (optional): generate binned variance bigWig.
+- `make_binned_methylation_bigwig.R` (optional): generate binned methylation bigWig.
+- `make_binned_variance_bigwig.R` (optional): generate binned variance bigWig.
 
 Simulation resources:
 
-- simulation/simulate_sites.R
-- simulation/README.md
+- `simulation/simulate_sites.R`
+- `simulation/README.md`
 
 Detailed method tutorial:
 
-- tutorial/tutorial_glmmDMR.md
+- `tutorial/tutorial_glmmDMR.md`
 
 ## 2. Installation
 
@@ -82,7 +82,7 @@ Rscript DMR_merge.R --help
 
 ## 5. Step-by-Step Inputs and Outputs
 
-### Step 1: summarize_extractor.py
+### Step 1: `summarize_extractor.py`
 
 Input:
 
@@ -102,7 +102,7 @@ python summarize_extractor.py \
   --threads 4
 ```
 
-### Step 2: BinomTest.py
+### Step 2: `BinomTest.py`
 
 Input:
 
@@ -128,7 +128,7 @@ python BinomTest.py \
   --threads 4
 ```
 
-### Step 3: prepare_matrix.sh
+### Step 3: `prepare_matrix.sh`
 
 Input:
 
@@ -152,7 +152,7 @@ bash prepare_matrix.sh \
   --output prep_out
 ```
 
-### Step 4: run_glmmDMR.R
+### Step 4: `run_glmmDMR.R`
 
 Input:
 
@@ -183,7 +183,7 @@ Rscript run_glmmDMR.R \
   --workers 8 --batches 200
 ```
 
-### Step 5: DMR_merge.R
+### Step 5: `DMR_merge.R`
 
 Input:
 
