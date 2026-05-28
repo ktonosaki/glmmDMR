@@ -1,30 +1,57 @@
 <img width="500" height="100" alt="glmmDMR_logo" src=glmmDMR_logo.png />
 
+# glmmDMR
 
-## glmmDMR
-glmmDMR partitions DNA methylation data into fixed-size sliding windows and applies a generalized linear mixed model (GLMM) with methylated cytosine counts per window as the response variable. By modeling the comparison target as a fixed effect while accounting for biological replicates, the framework estimates window-level methylation differences and statistical significance while incorporating between-replicate variability. To construct DMRs from significant windows, three integration modes are implemented: (i) `multi_seed`, which statistically combines multiple adjacent moderate signals, (ii) `single_seed`, which starts from a strongly significant single window and expands the region, and (iii) `hybrid_seed`, which prioritizes `multi_seed` and complements uncovered regions with `single_seed`.
+glmmDMR is a statistical framework for replicate-aware detection of differentially methylated regions (DMRs) from whole-genome bisulfite sequencing (WGBS) or enzymatic methyl-seq (EM-seq) data. The framework integrates generalized linear mixed models (GLMMs) with a seed-based region construction strategy to improve detection accuracy and reduce false positives driven by replicate-level methylation variability.
+
+glmmDMR consists of three core components:
+
+1. **Window-level data organization**: cytosine sites are organized into fixed-length sliding windows while preserving site-level methylation information across samples and replicates.
+2. **Replicate-aware statistical modeling**: methylation data within each window are modeled using a GLMM that treats group identity as a fixed effect and biological replicates as random effects, explicitly capturing replicate-level variability without prior aggregation.
+3. **Seed-based DMR construction**: window-level statistical signals are integrated into DMRs using one of three seed strategies — `single_seed`, `multi_seed`, or `hybrid_seed` — each initiating region construction from locally high-confidence windows and expanding based on directional consistency and Stouffer-combined p-values.
+
+> **Key finding**: False-positive DMR detections arise predominantly from genomic regions with high replicate-level methylation variability, not from regions with weak biological signals. glmmDMR addresses this directly through GLMM-based variance modeling.
+
+---
+
+## Table of Contents
+
+1. [Repository Contents](#1-repository-contents)
+2. [Installation](#2-installation)
+3. [Quick Environment Check](#3-quick-environment-check)
+4. [Typical Workflow](#4-typical-workflow)
+5. [Step-by-Step Inputs and Outputs](#5-step-by-step-inputs-and-outputs)
+6. [Runtime Notes](#6-runtime-notes)
+7. [Simulation and Benchmarking](#7-simulation-and-benchmarking)
+8. [Citation](#8-citation)
+9. [License](#9-license)
+
+---
 
 ## 1. Repository Contents
 
-Core scripts:
+**Core scripts:**
 
-- `summarize_extractor.py`: summarize Bismark extractor output (`*.txt.gz`) into per-site counts.
-- `BinomTest.py`: per-site binomial test with FDR-based filtering behavior.
-- `prepare_matrix.sh`: build two-group sliding-window matrices.
-- `run_glmmDMR.R`: fit GLMM per window (`binom`/`beta`, `aggregate`/`site`).
-- `merge_window.R`: merge significant windows into DMRs.
-  - Supported `--merge-mode`: `single_seed`, `multi_seed`, `hybrid_seed`.
-- `make_binned_methylation_bigwig.R` (optional): generate binned methylation bigWig.
-- `make_binned_variance_bigwig.py` (optional): generate binned variance bigWig.
+| Script | Description |
+|---|---|
+| `summarize_extractor.py` | Summarize Bismark extractor output (`*.txt.gz`) into per-site methylation counts |
+| `BinomTest.py` | Per-site binomial test with bisulfite non-conversion correction and FDR filtering |
+| `prepare_matrix.sh` | Build two-group sliding-window matrices from per-site data |
+| `run_glmmDMR.R` | Fit GLMM per window; supports `binom`/`beta` × `aggregate`/`site` configurations |
+| `merge_window.R` | Integrate significant windows into DMRs using seed-based strategies |
+| `make_binned_methylation_bigwig.R` | (Optional) Generate binned methylation bigWig files for visualization |
+| `make_binned_variance_bigwig.py` | (Optional) Generate binned variance bigWig files for visualization |
 
-Simulation resources:
+**Simulation resources:**
 
-- `simulation/simulate_sites.R`
-- `simulation/README.md`
+- `simulation/simulate_sites.R`: simulate synthetic WGBS datasets with known ground-truth DMRs
+- `simulation/README.md`: simulation parameter documentation
 
-Detailed method tutorial:
+**Documentation:**
 
-- `tutorial/tutorial_glmmDMR.md`
+- `tutorial/tutorial_glmmDMR.md`: detailed step-by-step tutorial
+
+---
 
 ## 2. Installation
 
@@ -33,21 +60,21 @@ git clone https://github.com/ktonosaki/glmmDMR.git
 cd glmmDMR
 ```
 
-Optional executable flags:
+**Optional: set executable flags**
 
 ```bash
 chmod +x summarize_extractor.py BinomTest.py prepare_matrix.sh
-chmod +x run_glmmDMR.R DMR_merge.R
+chmod +x run_glmmDMR.R merge_window.R
 chmod +x make_binned_methylation_bigwig.R make_binned_variance_bigwig.py
 ```
 
-Python dependencies:
+**Python dependencies:**
 
 ```bash
 python -m pip install pandas numpy scipy statsmodels pyBigWig tqdm
 ```
 
-R dependencies:
+**R dependencies:**
 
 ```r
 install.packages(c("optparse", "data.table", "glmmTMB", "future", "future.apply"))
@@ -55,12 +82,14 @@ if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocMana
 BiocManager::install(c("GenomicRanges", "rtracklayer"))
 ```
 
-Recommended CLI tools:
+**Recommended external tools:**
 
-- bedtools
-- samtools
+- [bedtools](https://bedtools.readthedocs.io/)
+- [samtools](http://www.htslib.org/)
 - gzip / zcat
-- Bismark (+ bowtie2) for upstream methylation extraction
+- [Bismark](https://www.bioinformatics.babraham.ac.uk/projects/bismark/) (+ Bowtie2) for upstream methylation extraction
+
+---
 
 ## 3. Quick Environment Check
 
@@ -69,36 +98,44 @@ python summarize_extractor.py --help
 python BinomTest.py --help
 bash prepare_matrix.sh --help
 Rscript run_glmmDMR.R --help
-Rscript DMR_merge.R --help
+Rscript merge_window.R --help
 ```
+
+---
 
 ## 4. Typical Workflow
 
-1. Upstream methylation extraction (alignment and base call by Bismark).
-2. Summarize extractor output per sample.
-3. Run per-site binomial filtering.
-4. Build two-group sliding-window matrix.
-5. Run GLMM per window.
-6. Merge windows into DMRs.
-7. Optionally generate bigWig tracks.
+```
+Raw FASTQ
+    ↓  (Bismark alignment + deduplication)
+Bismark extractor output
+    ↓  summarize_extractor.py      [Step 1]
+Per-site methylation counts
+    ↓  BinomTest.py                [Step 2]
+Per-site binomial test results
+    ↓  prepare_matrix.sh           [Step 3]
+Sliding-window matrix
+    ↓  run_glmmDMR.R               [Step 4]
+Window-level GLMM statistics
+    ↓  merge_window.R              [Step 5]
+DMR calls (TSV + BED)
+    ↓  make_binned_*_bigwig        [Step 6, optional]
+BigWig tracks for visualization
+```
 
-Quick link:
-- Detailed tutorial: [tutorial/tutorial_glmmDMR.md](tutorial/tutorial_glmmDMR.md)
+For a detailed tutorial: [tutorial/tutorial_glmmDMR.md](tutorial/tutorial_glmmDMR.md)
+
+---
 
 ## 5. Step-by-Step Inputs and Outputs
 
 ### Step 1: `summarize_extractor.py`
 
-Input:
+Summarizes per-context methylation counts from Bismark extractor output files into a single per-site table.
 
-- Bismark extractor output files (`*.txt.gz`) for one sample.
+**Input:** Bismark methylation extractor output directory (`*.txt.gz`) for one sample.
 
-Output:
-
-- `*_summarized_output.tsv.gz`
-- Key columns: `chr, pos, strand, meth, unmeth, context`
-
-Example:
+**Output:** `*_summarized_output.tsv.gz` with key columns: `chr, pos, strand, meth, unmeth, context`
 
 ```bash
 python summarize_extractor.py \
@@ -107,28 +144,22 @@ python summarize_extractor.py \
   --threads 4
 ```
 
+---
+
 ### Step 2: `BinomTest.py`
 
-Input:
+Performs a per-site binomial test to identify cytosines with methylation levels significantly above the bisulfite non-conversion rate. Non-significant sites are retained in the output but have their `meth` count set to `0`, ensuring they do not contribute to downstream window-level signal while preserving coverage information.
 
-- `*_summarized_output.tsv.gz`
+**Input:** `*_summarized_output.tsv.gz`
 
-Output:
+**Output:** `*_binomtest_result.tsv.gz`
 
-- `*_binomtest_result.tsv.gz`
+**Estimating the non-conversion rate:**
 
-Behavior note:
-
-- Non-significant sites are retained, but `meth` is set to `0` for downstream usage.
-
-Null probability note:
-
-- Recommended: specify `--nonconv_chr` to estimate `null_prob` from a non-conversion control chromosome.
-- If no non-conversion control chromosome is available: provide a precomputed value with `--null_prob`.
-
-Example:
+The null probability (bisulfite non-conversion rate) can be estimated from a non-conversion control chromosome (e.g., chloroplast or lambda spike-in) using `--nonconv_chr`. If no control chromosome is available, provide a precomputed value with `--null_prob`.
 
 ```bash
+# Recommended: estimate from non-conversion control chromosome
 python BinomTest.py \
   -i sample_summarized_output.tsv.gz \
   -o sample_binomtest_result.tsv.gz \
@@ -138,9 +169,8 @@ python BinomTest.py \
   --threads 4
 ```
 
-Alternative example (without non-conversion control chromosome):
-
 ```bash
+# Alternative: provide precomputed non-conversion rate
 python BinomTest.py \
   -i sample_summarized_output.tsv.gz \
   -o sample_binomtest_result.tsv.gz \
@@ -150,18 +180,17 @@ python BinomTest.py \
   --threads 4
 ```
 
+---
+
 ### Step 3: `prepare_matrix.sh`
 
-Input:
+Builds a two-group sliding-window matrix from per-site binomial test results, organizing methylation counts across all samples and replicates within each window.
 
-- Group1 and Group2 sets of `*_binomtest_result.tsv.gz`
-- Reference FASTA/FAI
+**Input:**
+- Group 1 and Group 2 sets of `*_binomtest_result.tsv.gz`
+- Reference FASTA (with FAI index)
 
-Output:
-
-- Sliding-window matrix TSV.GZ files
-
-Example:
+**Output:** Sliding-window matrix TSV.GZ files (one per methylation context)
 
 ```bash
 bash prepare_matrix.sh \
@@ -174,23 +203,36 @@ bash prepare_matrix.sh \
   --output prep_out
 ```
 
+---
+
 ### Step 4: `run_glmmDMR.R`
 
-Input:
+Fits a GLMM to each window to test for differential methylation between groups while explicitly modeling replicate-level variability as random effects.
 
-- Window matrix TSV.GZ
+**Model configurations** (`--family` × `--mode`):
 
-Output:
+| Configuration | Response variable | Data representation |
+|---|---|---|
+| `beta` + `site` | Methylation proportion per cytosine | Site-level (recommended) |
+| `beta` + `aggregate` | Window-mean methylation proportion | Aggregated |
+| `binom` + `site` | Methylated read counts per cytosine | Site-level |
+| `binom` + `aggregate` | Total methylated counts per window | Aggregated |
 
-- `*_fit_<family>_<mode>.tsv.gz`
+The **beta site-level** configuration (`--family beta --mode site`) is recommended based on benchmarking: it maintains the highest precision across a wide range of effect sizes and most effectively suppresses false positives driven by high methylation variance.
 
-Key options:
+Group differences are modeled as fixed effects; biological replicates are modeled as random intercepts ($u_i \sim N(0, \sigma^2)$). Statistical significance is assessed by likelihood ratio test, with p-values adjusted using the Benjamini–Hochberg method.
+
+**Input:** Sliding-window matrix TSV.GZ from `prepare_matrix.sh`
+
+**Output:** `*_fit_<family>_<mode>.tsv.gz` with columns including `chr, start, end, p, delta`
+
+**Key options:**
 
 - `--family`: `binom` or `beta`
 - `--mode`: `aggregate` or `site`
-- `--workers`, `--batches`
-
-Example:
+- `--random_effect`: enable replicate-level random effects (recommended)
+- `--min_cov`: minimum coverage per site (default: 5)
+- `--workers`, `--batches`: parallelization settings
 
 ```bash
 Rscript run_glmmDMR.R \
@@ -205,95 +247,84 @@ Rscript run_glmmDMR.R \
   --workers 8 --batches 200
 ```
 
+---
+
 ### Step 5: `merge_window.R`
 
-Input:
+Integrates window-level GLMM statistics into DMRs using a seed-based region construction strategy. Window-level p-values within candidate regions are combined using the Stouffer method. All windows are first assigned a methylation direction based on the sign of the estimated group effect; only windows sharing the same direction are integrated into a common region.
 
-- GLMM fit table with required columns: `chr, start, end, p, delta`
+**Input:** GLMM fit table (`*_fit_<family>_<mode>.tsv.gz`) with required columns: `chr, start, end, p, delta`
 
-Output:
+**Output:** DMR TSV files and BED files per merge mode
 
-- DMR TSV files and BED files
+#### Seed strategies
 
-Supported merge modes:
+**`single_seed`**: Individual windows with p ≤ `--p-seed` are designated as seeds. Regions are expanded by incorporating adjacent same-direction windows within `--max-gap-bp` bp, provided that inclusion does not increase the Stouffer-combined p-value by more than `--max-p-degradation`-fold.
 
-- `single_seed`: start from a strong seed window and extend conservatively.
-- `multi_seed`: prioritize regions that include multiple significant seed windows.
-- `hybrid_seed`: run `multi_seed` first, then complement uncovered regions with `single_seed`.
+**`multi_seed`**: Clusters of neighboring same-direction windows are evaluated jointly; a cluster is designated as a seed if its Stouffer-combined p-value falls below `--p-seed`. Expansion follows the same criteria as `single_seed`.
 
-Options by group:
+**`hybrid_seed`** (default, recommended): Applies `multi_seed` genome-wide first, then applies `single_seed` to regions not covered by any multi-seed region. This approach balances sensitivity for clustered moderate signals and high-confidence individual signals.
 
-Input / Output:
+#### Key options
 
-- `--windows` (required): input GLMM window result (`*_fit_<family>_<mode>.tsv.gz`)
-- `--out-prefix` (default: `results/dmr`): output prefix
+**Seed / Extension:**
 
-Mode:
+| Option | Default | Description |
+|---|---|---|
+| `--p-seed` | 0.05 | Significance threshold for seed definition |
+| `--p-extend` | 0.05 | Significance threshold for region extension |
+| `--max-gap-bp` | 200 | Maximum gap (bp) between adjacent windows |
+| `--max-p-degradation` | 1.2 | Maximum allowed increase in combined p-value during extension |
+| `--max-final-p` | 1.0 | Maximum combined p-value of a retained DMR |
+| `--min-strong-windows` | 0.5 | Minimum fraction of windows with p ≤ `--p-seed` |
+| `--min-windows` | 1 | Minimum number of windows per DMR |
 
-- `--merge-mode` (default: `hybrid_seed`): `single_seed`, `multi_seed`, `hybrid_seed`
+**Adaptive effect size filter** (recommended for `multi_seed` and `hybrid_seed`):
 
-Seed / Extension:
+| Option | Default | Description |
+|---|---|---|
+| `--adaptive-delta` | FALSE | Enable adaptive minimum effect size threshold |
+| `--adaptive-delta-method` | `median_ratio` | Method: `median_ratio`, `q50`, `q25`, `q10`, `mad` |
+| `--adaptive-delta-ratio` | 0.6 | Ratio for `median_ratio` method |
 
-- `--p-seed` (default: `0.05`): seed significance threshold
-- `--p-extend` (default: `0.05`): extension threshold
-- `--max-gap-bp` (default: `200`): maximum gap to connect adjacent windows
-- `--min-windows` (default: `1`): minimum windows required for a DMR
-- `--min-delta` (default: `0`): minimum effect size for extension
-- `--max-p-degradation` (default: `1.2`): allowed p-value worsening during extension (`1.0` disables worsening)
-- `--max-final-p` (default: `1.0`): maximum combined p-value of final DMR
-- `--min-strong-windows` (default: `0.5`): minimum fraction of windows with `p <= p-seed`
+> **Note:** `--adaptive-delta` performs two passes: an initial pass without an effect size filter to estimate the distribution of Δmethylation across candidate DMRs, followed by a second pass applying a data-driven minimum |Δmethylation| threshold. `q25` is a practical starting point.
 
-Adaptive delta threshold:
+**Post-filter:**
 
-- `--adaptive-delta`: enable automatic effect-size thresholding
-- `--adaptive-delta-method` (default: `median_ratio`): `median_ratio`, `q50`, `q25`, `q10`, `mad`
-- `--adaptive-delta-ratio` (default: `0.6`): ratio used for `median_ratio`
+| Option | Default | Description |
+|---|---|---|
+| `--post-filter` | FALSE | Enable post-detection quality filtering |
+| `--min-median-p` | 0.01 | Maximum median p-value of windows in a retained DMR |
+| `--min-consistent-frac` | 0.5 | Minimum fraction of windows with p ≤ `--p-seed` |
 
-Adaptive delta usage note:
+**Overlap merge:**
 
-- `--adaptive-delta` is most useful in `multi_seed` or `hybrid_seed` workflows.
-- Quantile methods (`q50`, `q25`, `q10`) can be selected based on data distribution.
-- `q25` is a practical starting point for initial tuning.
-
-Multi-seed specific:
-
-- `--seed-min-windows` (default: `1`): minimum seed windows for `multi_seed` and `hybrid_seed`
-
-Post-filter:
-
-- `--post-filter`: enable post-detection DMR quality filtering
-- `--min-median-p` (default: `0.01`): median p-value cutoff in post-filter
-- `--min-consistent-frac` (default: `0.5`): minimum fraction with `p <= p-seed` in post-filter
-
-Length / median-p filters:
-
-- `--min-dmr-length` (default: `0`): minimum final DMR length (bp)
-- `--max-median-p` (default: `1.0`): independent median p-value filter
-
-Overlap merge:
-
-- `--merge-overlaps`: re-merge overlapping/nearby DMRs with the same direction
-- `--merge-overlaps-gap` (default: `0`): gap allowed for overlap re-merge
-
-Example:
+| Option | Default | Description |
+|---|---|---|
+| `--merge-overlaps` | FALSE | Re-merge overlapping/nearby same-direction DMRs |
+| `--merge-overlaps-gap` | 0 | Maximum gap (bp) for overlap re-merge |
 
 ```bash
 Rscript merge_window.R \
-  --windows glmm_out/WT_MT_CpG_fit_beta_aggregate.tsv.gz \
+  --windows glmm_out/WT_MT_CpG_fit_beta_site.tsv.gz \
   --out-prefix dmr_out/WT_MT_CpG \
   --merge-mode hybrid_seed \
   --p-seed 0.05 \
   --p-extend 0.05 \
-  --min-windows 1
+  --max-p-degradation 1.15 \
+  --max-final-p 0.0015 \
+  --min-strong-windows 0.5 \
+  --min-windows 1 \
+  --adaptive-delta
 ```
+
+---
 
 ### Step 6: Optional bigWig tracks
 
-Output:
+Generate binned methylation level and replicate-level variance bigWig files for genome browser visualization.
 
-- Binned methylation and variance bigWig files
-
-Methylation bigWig:
+**Methylation bigWig** (per sample):
 
 ```bash
 Rscript make_binned_methylation_bigwig.R \
@@ -304,7 +335,7 @@ Rscript make_binned_methylation_bigwig.R \
   --context CpG
 ```
 
-Variance bigWig:
+**Variance bigWig** (across replicates):
 
 ```bash
 python make_binned_variance_bigwig.py \
@@ -315,26 +346,43 @@ python make_binned_variance_bigwig.py \
   --norm none
 ```
 
+---
+
 ## 6. Runtime Notes
 
-- Pipeline assumes two-group comparisons.
-- Contexts are usually processed independently.
-- For large datasets, tune filtering and parallel options for memory/runtime balance.
-
-For large jobs, set a high-capacity temporary directory:
+- The pipeline assumes two-group comparisons (e.g., wild-type vs. mutant).
+- Methylation contexts (CG, CHG, CHH) are processed independently.
+- GLMM fitting is the most computationally intensive step. Use `--workers` and `--batches` to tune parallelization and memory usage for your system.
+- For large datasets or high-memory jobs, set a dedicated temporary directory:
 
 ```bash
 export TMPDIR=/path/to/large_storage/tmp
 mkdir -p "$TMPDIR"
 ```
 
+---
+
 ## 7. Simulation and Benchmarking
 
-For controlled benchmark data:
+Controlled benchmark datasets with known ground-truth DMRs can be generated using the simulation scripts:
 
-- simulation/README.md
-- simulation/simulate_sites.R
+- `simulation/simulate_sites.R`: generates synthetic CG methylation datasets with configurable overdispersion, replicate variability, coverage distribution, and DMR embedding parameters.
+- `simulation/README.md`: full documentation of simulation parameters.
+
+For details on benchmarking methodology and comparison with existing DMR detection methods (DSS, methylKit, DMRfinder, metilene, MACAU2, Fisher's exact test), see the associated publication.
+
+---
 
 ## 8. Citation
 
-If you use this repository, cite the repository URL and upstream method/tool papers used in your workflow.
+If you use glmmDMR in your research, please cite:
+
+> [Author names] (2025). glmmDMR: a GLMM-based framework for replicate-aware detection of differentially methylated regions. *Genome Biology* (in revision). [DOI upon publication]
+
+---
+
+## 9. License
+
+glmmDMR is released under the MIT License. See [LICENSE](LICENSE) for details.
+
+This software relies on third-party R packages including glmmTMB, GenomicRanges, and others listed in the Installation section. Please refer to the respective package documentation for their licensing terms.
