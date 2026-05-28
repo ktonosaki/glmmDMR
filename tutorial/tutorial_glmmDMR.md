@@ -1,8 +1,8 @@
 # glmmDMR Tutorial (Detailed Reference)
 
-This document is a practical, detailed reference for glmmDMR, covering what each script does, key options, and input/output formats.
+This document is a practical, detailed reference for glmmDMR, covering what each script does, key options, and input/output formats. For a quick overview of the pipeline, see [README.md](../README.md).
 
-Target scripts:
+**Target scripts:**
 - `summarize_extractor.py`
 - `BinomTest.py`
 - `prepare_matrix.sh`
@@ -11,24 +11,59 @@ Target scripts:
 - `make_binned_methylation_bigwig.R` (optional)
 - `make_binned_variance_bigwig.py` (optional)
 
+---
+
 ## 1. Pipeline Summary
 
-Standard workflow:
-1. Run methylation extraction with Bismark (upstream)
-2. Summarize sites with `summarize_extractor.py`
-3. Filter sites with `BinomTest.py`
-4. Build a window matrix with `prepare_matrix.sh`
-5. Estimate window-level GLMM statistics with `run_glmmDMR.R`
-6. Integrate windows into DMRs with `DMR_merge.R`
-7. Optionally generate bigWig tracks for visualization
+**Standard workflow:**
 
-Execution unit guide:
-- Steps 2-3 (Sections 3.1-3.2) are run per sample.
-- Step 4 (Section 3.3) integrates multiple sample outputs by group.
+```
+Raw FASTQ
+    ↓  Quality trimming (fastp)                [Upstream, Section 2]
+    ↓  Bismark alignment + deduplication       [Upstream, Section 2]
+Bismark extractor output
+    ↓  summarize_extractor.py                  [Step 1, Section 3.1]
+Per-site methylation counts
+    ↓  BinomTest.py                            [Step 2, Section 3.2]  ← per sample
+Per-site binomial test results
+    ↓  prepare_matrix.sh                       [Step 3, Section 3.3]  ← integrates all samples
+Sliding-window matrix
+    ↓  run_glmmDMR.R                           [Step 4, Section 3.4]
+Window-level GLMM statistics
+    ↓  merge_window.R                          [Step 5, Section 3.5]
+DMR calls (TSV + BED)
+    ↓  make_binned_*_bigwig                    [Step 6, Section 3.6-3.7, optional]
+BigWig tracks for visualization
+```
 
-## 2. Upstream analysis example (before glmmDMR)
+**Execution unit guide:**
+- Steps 1–2 (Sections 3.1–3.2) are run **per sample**.
+- Step 3 (Section 3.3) integrates all per-sample outputs by group.
+- Steps 4–5 operate on the integrated window matrix.
 
-Below is a minimal Bismark-based upstream example commonly used before feeding data into glmmDMR.
+---
+
+## 2. Upstream Analysis (before glmmDMR)
+
+Below is a minimal example of the upstream pipeline used to generate Bismark extractor output from raw FASTQ files.
+
+**Quality trimming:**
+
+```bash
+fastp \
+  -i sample_R1.fastq.gz \
+  -I sample_R2.fastq.gz \
+  -o clean/sample_R1.trimmed.fq.gz \
+  -O clean/sample_R2.trimmed.fq.gz \
+  --qualified_quality_phred 30 \
+  --cut_front --cut_tail \
+  --cut_window_size 4 \
+  --cut_mean_quality 20 \
+  --length_required 36 \
+  --thread 8
+```
+
+**Alignment:**
 
 ```bash
 bismark \
@@ -36,14 +71,18 @@ bismark \
   -p 8 \
   -o align \
   /path/to/bismark_genome \
-  -1 clean/sample_1.trimmed.fq.gz \
-  -2 clean/sample_2.trimmed.fq.gz
+  -1 clean/sample_R1.trimmed.fq.gz \
+  -2 clean/sample_R2.trimmed.fq.gz
 
-samtools view -@ 8 -q 42 -b align/sample_1.trimmed_bismark_bt2_pe.bam | \
+samtools view -@ 8 -q 42 -b align/sample_R1.trimmed_bismark_bt2_pe.bam | \
   samtools sort -n -@ 8 -o align/sample.Q42.bam
+```
 
-mkdir -p calls/sample
+> **Note:** Alignments with mapping quality (MAPQ) below 42 are discarded to reduce multi-mapping artifacts.
 
+**Deduplication and methylation calling:**
+
+```bash
 # PCR deduplication
 deduplicate_bismark \
   --paired \
@@ -51,7 +90,7 @@ deduplicate_bismark \
   --bam \
   align/sample.Q42.bam
 
-# Call methylC
+# Methylation calling
 bismark_methylation_extractor \
   --paired-end \
   --output calls/sample \
@@ -62,34 +101,40 @@ bismark_methylation_extractor \
   align/sample.Q42.deduplicated.bam
 ```
 
-Use these outputs (`CpG_*.txt.gz`, `CHG_*.txt.gz`, `CHH_*.txt.gz`) as input to `summarize_extractor.py` in the next section.
+Use the resulting output files (`CpG_*.txt.gz`, `CHG_*.txt.gz`, `CHH_*.txt.gz`) as input to `summarize_extractor.py` in Step 1.
+
+---
 
 ## 3. Script-by-Script Details
 
-## 3.1 `summarize_extractor.py`
-- Scans `CpG_*.txt.gz`, `CHG_*.txt.gz`, and `CHH_*.txt.gz` in the input directory, aggregates counts per site, writes temporary TSV files per context, then merges all contexts into a final `tsv.gz` file.
+### 3.1 `summarize_extractor.py`
 
-Options:
-- `-i, --input` (required): extractor output directory
-- `-o, --output` (required): output `*.tsv.gz`
-- `--threads` (default: 4): number of worker threads
-- `--keep-temp`: keep context-specific temporary files
+Scans Bismark extractor output files (`CpG_*.txt.gz`, `CHG_*.txt.gz`, `CHH_*.txt.gz`) in the input directory, aggregates methylated and unmethylated counts per cytosine site, and writes a merged per-site table across all three contexts.
 
-Input format:
-- `*.txt.gz` files containing Bismark extractor-like 5-column records
-- Expected columns: read_id, strand, chr, pos, code
+**Options:**
 
-Output format (`*_summarized_output.tsv.gz`):
-| Column | Type / Values | Description |
-| --- | --- | --- |
+| Option | Default | Description |
+|---|---|---|
+| `-i, --input` | required | Bismark extractor output directory |
+| `-o, --output` | required | Output `*.tsv.gz` |
+| `--threads` | 4 | Number of worker threads |
+| `--keep-temp` | FALSE | Keep context-specific temporary files |
+
+**Input format:** `*.txt.gz` files containing Bismark extractor 5-column records (read_id, strand, chr, pos, code).
+
+**Output format (`*_summarized_output.tsv.gz`):**
+
+| Column | Type | Description |
+|---|---|---|
 | `chr` | string | Chromosome name |
 | `pos` | int (1-based) | Genomic position |
 | `strand` | `+` / `-` | Strand |
-| `meth` | int | Methylated count |
-| `unmeth` | int | Unmethylated count |
+| `meth` | int | Methylated read count |
+| `unmeth` | int | Unmethylated read count |
 | `context` | `CpG` / `CHG` / `CHH` | Cytosine context |
 
-Example:
+**Example:**
+
 ```bash
 python summarize_extractor.py \
   -i calls/sample \
@@ -97,33 +142,44 @@ python summarize_extractor.py \
   --threads 4
 ```
 
-## 3.2 `BinomTest.py`
-Performs site-level binomial testing with BH-FDR correction to suppress low-confidence signals. Non-significant sites are zeroed.
+---
 
-Options:
-- `-i, --input` (required): summarize_extractor output
-- `-o, --output` (required): output `*.tsv.gz`
-- `--nonconv_chr` (default: None): chromosome used to estimate non-conversion rate (recommended when available)
-- `--null_prob` (default: None): null probability (use when `--nonconv_chr` cannot be used)
-- `--fdr_threshold` (default: 0.05): FDR threshold
-- `--min_coverage` (default: 0): minimum coverage
-- `--threads` (default: 4): number of workers
+### 3.2 `BinomTest.py`
 
-Recommended usage for null probability:
-- Preferred: set `--nonconv_chr` and estimate `null_prob` from a non-conversion control chromosome.
-- Alternative: if no non-conversion control is available, provide a precomputed value via `--null_prob`.
+Performs a per-site binomial test to identify cytosines with methylation levels significantly above the bisulfite non-conversion rate. The test is applied independently per context, with p-values adjusted using the Benjamini–Hochberg method.
 
-Output format (`*_binomtest_result.tsv.gz`):
-| Column | Type / Values | Description |
-| --- | --- | --- |
+> **Behavior note:** Non-significant sites are **retained** in the output but have their `meth` count set to `0`. This ensures that such sites do not contribute to downstream window-level signal while preserving coverage information for accurate replicate filtering and window construction in `prepare_matrix.sh`.
+
+**Options:**
+
+| Option | Default | Description |
+|---|---|---|
+| `-i, --input` | required | `summarize_extractor.py` output |
+| `-o, --output` | required | Output `*.tsv.gz` |
+| `--nonconv_chr` | None | Chromosome used to estimate non-conversion rate (recommended) |
+| `--null_prob` | None | Precomputed non-conversion rate (use when `--nonconv_chr` is unavailable) |
+| `--fdr_threshold` | 0.05 | FDR threshold |
+| `--min_coverage` | 0 | Minimum coverage per site |
+| `--threads` | 4 | Number of worker threads |
+
+**Estimating the non-conversion rate:**
+
+- **Recommended:** Use `--nonconv_chr` to estimate the null probability from a non-conversion control chromosome (e.g., chloroplast, lambda spike-in). This is the most accurate approach.
+- **Alternative:** If no control chromosome is available, provide a precomputed value via `--null_prob`. A typical value for WGBS of plants is 0.001–0.015, depending on the bisulfite conversion efficiency.
+
+**Output format (`*_binomtest_result.tsv.gz`):**
+
+| Column | Type | Description |
+|---|---|---|
 | `chr` | string | Chromosome name |
 | `pos` | int (1-based) | Genomic position |
 | `strand` | `+` / `-` | Strand |
-| `meth` | int | Methylated count (non-significant sites are set to 0) |
+| `meth` | int | Methylated count (set to 0 for non-significant sites) |
 | `unmeth` | int | Unmethylated count |
 | `context` | `CpG` / `CHG` / `CHH` | Cytosine context |
 
-Example:
+**Example (with non-conversion control chromosome):**
+
 ```bash
 python BinomTest.py \
   -i matrix/sample_summarized_output.tsv.gz \
@@ -134,7 +190,8 @@ python BinomTest.py \
   --threads 4
 ```
 
-Example (without non-conversion control chromosome; use precomputed null_prob):
+**Example (without non-conversion control chromosome):**
+
 ```bash
 python BinomTest.py \
   -i matrix/sample_summarized_output.tsv.gz \
@@ -145,29 +202,31 @@ python BinomTest.py \
   --threads 4
 ```
 
-## 3.3 `prepare_matrix.sh`
+---
 
-Purpose:
-- Generates context-specific sliding-window matrices for two-group comparison.
-- Takes per-sample `*_binomtest_result.tsv.gz` files from Sections 3.1-3.2 and integrates them via `--group1` and `--group2`.
+### 3.3 `prepare_matrix.sh`
 
-Options:
-- `--fasta` (required): FASTA or FAI
-- `--group1` (required): group1 BinomTest TSV.gz files (multiple allowed)
-- `--group2` (required): group2 BinomTest TSV.gz files (multiple allowed)
-- `--group_labels` (default: `group1 group2`): group names
-- `--window` (default: 300): window size
-- `--slide` (default: 200): slide size
-- `--output` (default: `./matrix_out`): output directory
-- `--tmpdir`: temporary directory
+Generates context-specific sliding-window matrices for two-group comparison. Takes per-sample `*_binomtest_result.tsv.gz` files from Sections 3.1–3.2 and integrates them across all samples and replicates within each window.
 
-Output format (`<g1>_<g2>_<ctx>_matrix.tsv.gz`):
-| Item | Description |
-| --- | --- |
-| Layout | Fixed 13-column layout derived from `bedtools intersect -wa -wb` |
-| Effective content | Window coordinates + site coordinates/group/sample/strand/meth/unmeth/coverage |
+**Options:**
 
-Example (2 samples per group):
+| Option | Default | Description |
+|---|---|---|
+| `--fasta` | required | Reference FASTA or FAI |
+| `--group1` | required | Group 1 BinomTest TSV.gz files (multiple allowed) |
+| `--group2` | required | Group 2 BinomTest TSV.gz files (multiple allowed) |
+| `--group_labels` | `group1 group2` | Group names used in downstream analyses |
+| `--window` | 300 | Window size (bp) |
+| `--slide` | 200 | Slide size (bp) |
+| `--output` | `./matrix_out` | Output directory |
+| `--tmpdir` | system default | Temporary directory |
+
+**Output format (`<g1>_<g2>_<ctx>_matrix.tsv.gz`):**
+
+A 13-column layout derived from `bedtools intersect -wa -wb`, containing window coordinates, site coordinates, group/sample labels, strand, methylated counts, unmethylated counts, and coverage.
+
+**Example (2 replicates per group):**
+
 ```bash
 bash prepare_matrix.sh \
   --fasta /path/to/TAIR10.fasta \
@@ -181,69 +240,103 @@ bash prepare_matrix.sh \
   --output prep_out
 ```
 
-Example (4 samples per group):
+**Example (4 replicates per group):**
+
 ```bash
 bash prepare_matrix.sh \
   --fasta /path/to/TAIR10.fasta \
   --group1 binom/WT_1_binomtest_result.tsv.gz \
            binom/WT_2_binomtest_result.tsv.gz \
-           binom/WT_1_binomtest_result.tsv.gz \
-           binom/WT_2_binomtest_result.tsv.gz \
+           binom/WT_3_binomtest_result.tsv.gz \
+           binom/WT_4_binomtest_result.tsv.gz \
   --group2 binom/MT_1_binomtest_result.tsv.gz \
            binom/MT_2_binomtest_result.tsv.gz \
-           binom/MT_1_binomtest_result.tsv.gz \
-           binom/MT_2_binomtest_result.tsv.gz \
+           binom/MT_3_binomtest_result.tsv.gz \
+           binom/MT_4_binomtest_result.tsv.gz \
   --group_labels WT MT \
   --window 500 \
   --slide 300 \
   --output prep_out
 ```
 
-## 3.4 `run_glmmDMR.R`
-- Fits GLMMs per window and estimates p-values, delta, and summary statistics. While multiple settings are available, `beta` family with `site` mode generally provides the highest accuracy. Stage-wise filtering by context, coverage, site count, and replicate count is supported. Optional `prefilter_delta` can accelerate computation by removing low-effect windows before fitting.
+---
 
-Options:
+### 3.4 `run_glmmDMR.R`
 
-Input / Output:
-- `-i, --infile` (required): input matrix
-- `-o, --out_prefix` (required): output prefix
+Fits a GLMM to each window and estimates p-values, methylation differences (delta), and summary statistics. The framework supports four model configurations defined by the combination of response distribution (`--family`) and data representation (`--mode`).
 
-Data selection:
-- `-c, --context` (default: NULL): context filter (`CpG`/`CHG`/`CHH`)
-- `--group1`, `--group2` (required): comparison group labels
+**Model configurations:**
 
-Model:
-- `--family` (default: `beta`): `binom` or `beta` (`beta` + `site` is generally most accurate)
-- `--mode` (default: `site`): `aggregate` (window-level summary) or `site` (site-level model)
-- `--random_effect` (default: TRUE): use random effect `(1|sample)`
+| `--family` | `--mode` | Response variable | Data representation |
+|---|---|---|---|
+| `beta` | `site` | Methylation proportion per cytosine | Site-level (**recommended**) |
+| `beta` | `aggregate` | Window-mean methylation proportion | Aggregated |
+| `binom` | `site` | Methylated read counts per cytosine | Site-level |
+| `binom` | `aggregate` | Total methylated counts per window | Aggregated |
 
-Pre-filter (before GLMM fitting):
-- `--min_reps_g1`, `--min_reps_g2` (default: 2): minimum replicates per group
-- `--min_cov` (default: 0): site coverage filter
-- `--min_sites_win` (default: 0): minimum sites per window
-- `--prefilter_delta` (default: 0): pre-remove windows with small delta (for speed)
+> **Recommendation:** `--family beta --mode site` is recommended based on benchmarking against simulated datasets with known ground-truth DMRs. This configuration maintains the highest precision across a broad range of methylation effect sizes, including subtle differences, and most effectively suppresses false positives driven by high replicate-level methylation variability. The beta distribution appropriately models the bounded [0,1] nature of methylation proportions, while site-level representation preserves cytosine-resolution information within each window.
 
-Computation:
-- `--workers` (default: 4): worker count
-- `--batches` (default: 50): number of batches
-- `--max_globals_mb` (default: 1000): future globals size limit (MB)
-- `--seed` (default: 1): random seed
+In all configurations, group differences are modeled as fixed effects and biological replicates as random intercepts ($u_i \sim N(0, \sigma^2)$) when `--random_effect` is enabled. Statistical significance is assessed by likelihood ratio test comparing the full model against a reduced model without the group fixed effect, with p-values adjusted using the Benjamini–Hochberg method.
 
-Output format (`*_fit_<family>_<mode>.tsv.gz`):
+**Options:**
+
+*Input / Output:*
+
+| Option | Default | Description |
+|---|---|---|
+| `-i, --infile` | required | Input window matrix |
+| `-o, --out_prefix` | required | Output prefix |
+
+*Data selection:*
+
+| Option | Default | Description |
+|---|---|---|
+| `-c, --context` | NULL | Context filter (`CpG` / `CHG` / `CHH`) |
+| `--group1`, `--group2` | required | Comparison group labels |
+
+*Model:*
+
+| Option | Default | Description |
+|---|---|---|
+| `--family` | `beta` | Response distribution: `binom` or `beta` |
+| `--mode` | `site` | Data representation: `aggregate` or `site` |
+| `--random_effect` | TRUE | Model biological replicates as random intercepts |
+
+*Pre-filter (applied before GLMM fitting):*
+
+| Option | Default | Description |
+|---|---|---|
+| `--min_reps_g1`, `--min_reps_g2` | 2 | Minimum replicates per group required per window |
+| `--min_cov` | 0 | Minimum coverage per cytosine site |
+| `--min_sites_win` | 0 | Minimum cytosine sites per window |
+| `--prefilter_delta` | 0 | Pre-remove windows with |delta| below this value (for speed) |
+
+*Computation:*
+
+| Option | Default | Description |
+|---|---|---|
+| `--workers` | 4 | Number of parallel workers |
+| `--batches` | 50 | Number of batches for parallel processing |
+| `--max_globals_mb` | 1000 | future globals size limit (MB) |
+| `--seed` | 1 | Random seed for reproducibility |
+
+**Output format (`*_fit_<family>_<mode>.tsv.gz`):**
+
 | Column | Description |
-| --- | --- |
+|---|---|
 | `chr` | Chromosome name |
 | `start` | Window start position |
 | `end` | Window end position |
 | `model` | Fitted model identifier |
-| `p` | Statistical significance p-value |
-| `delta` | Estimated methylation difference between groups |
-| `mean_rate1` | Mean methylation rate in group1 |
-| `mean_rate2` | Mean methylation rate in group2 |
-| `aic_diff` | AIC difference metric |
-| `bic_diff` | BIC difference metric |
+| `p` | Window-level p-value (BH-adjusted) |
+| `delta` | Estimated methylation difference (group2 − group1) |
+| `mean_rate1` | Mean methylation rate in group 1 |
+| `mean_rate2` | Mean methylation rate in group 2 |
+| `aic_diff` | AIC difference (full vs. reduced model) |
+| `bic_diff` | BIC difference (full vs. reduced model) |
 
-Example:
+**Example:**
+
 ```bash
 Rscript run_glmmDMR.R \
   -i prep_out/WT_MT_CpG_matrix.tsv.gz \
@@ -258,101 +351,141 @@ Rscript run_glmmDMR.R \
   --workers 8 --batches 200 --max_globals_mb 2000
 ```
 
-## 3.5 `merge_window.R`
+---
 
-- Integrates window-level significant signals into DMRs using the following three modes.
+### 3.5 `merge_window.R`
 
-Supported merge modes:
-- `single_seed`: starts from a strong single seed window and extends, conservative and easy to interpret.
-- `multi_seed`: prioritizes linking regions containing multiple significant seed windows; strong for multi-peak regions.
-- `hybrid_seed`: prioritizes `multi_seed` and complements uncovered regions with `single_seed`.
+Integrates window-level GLMM statistics into DMRs using a seed-based region construction strategy. Window-level p-values within candidate regions are combined using the **Stouffer method**: each p-value is converted to a z-score ($z_i = \Phi^{-1}(1 - p_i)$) and the combined p-value is computed as $p_{\text{combined}} = 2\Phi(-|\sum z_i / \sqrt{k}|)$, where $k$ is the number of windows. This approach weights each window equally and yields a combined p-value that reflects both the number and consistency of significant windows within a region.
 
-Options:
+All windows are first assigned a methylation direction based on the sign of the estimated group effect (`delta`): positive delta → hypermethylated; negative delta → hypomethylated. Only windows sharing the same direction are integrated into a common region.
 
-Input / Output:
-- `--windows` (required): GLMM window results (`*_fit_<family>_<mode>.tsv.gz`)
-- `--out-prefix` (default: `results/dmr`): output prefix
+**Supported merge modes:**
 
-Mode:
-- `--merge-mode` (default: `hybrid_seed`): only the three modes above are valid
+| Mode | Description |
+|---|---|
+| `single_seed` | Starts from a single highly significant window (seed) and extends conservatively in both directions. Best for sharp, localized signals. |
+| `multi_seed` | Defines seeds as clusters of neighboring significant windows evaluated jointly by combined p-value. Best for broad regions with multiple moderate signals. |
+| `hybrid_seed` | Applies `multi_seed` genome-wide first, then applies `single_seed` to regions not covered by any multi-seed. **Default and recommended** for most use cases. |
 
-Seed / Extension (core detection parameters):
-- `--p-seed` (default: 0.05): p-value threshold for seed windows
-- `--p-extend` (default: 0.05): p-value threshold for extension
-- `--max-gap-bp` (default: 200): max gap to connect neighboring windows into one candidate
-- `--min-windows` (default: 1): minimum windows required to report a DMR
-- `--min-delta` (default: 0): minimum effect size threshold during extension
-- `--max-p-degradation` (default: 1.2): allowed p-value worsening factor during extension (1.0 = no worsening)
-- `--max-final-p` (default: 1.0): upper bound of final DMR combined p-value
-- `--min-strong-windows` (default: 0.5): minimum fraction of windows with p <= p-seed in the final DMR
+**Options:**
 
-Adaptive delta threshold (automatic effect-size thresholding):
-- `--adaptive-delta`: enable two-stage detection with data-driven delta thresholding
-- `--adaptive-delta-method` (default: `median_ratio`): threshold method (`median_ratio`, `q50`, `q25`, `q10`, `mad`)
-- `--adaptive-delta-ratio` (default: 0.6): ratio used in `median_ratio`
+*Input / Output:*
 
-Notes:
-- Using `adaptive-delta` in `multi_seed`, or in `hybrid_seed` (which runs `multi_seed` internally), often improves detection quality.
-- In `method`, you can choose quantile-based thresholds (`q50`, `q25`, `q10`, etc.) based on data distribution.
-- In `ratio`, you can directly control the threshold scaling.
-- As an initial setting, `q25` (about 25%) is recommended.
+| Option | Default | Description |
+|---|---|---|
+| `--windows` | required | GLMM window results (`*_fit_<family>_<mode>.tsv.gz`) |
+| `--out-prefix` | `results/dmr` | Output file prefix |
 
-Multi-seed specific:
-- `--seed-min-windows` (default: 1): minimum seed windows for `multi_seed` and `hybrid_seed`
+*Mode:*
 
-Post-filter (consistency checks after detection):
-- `--post-filter`: enable quality filtering of candidate DMRs
-- `--min-median-p` (default: 0.01): median p-value upper bound within a DMR (post-filter criterion)
-- `--min-consistent-frac` (default: 0.5): minimum fraction of windows with p <= p-seed (post-filter criterion)
+| Option | Default | Description |
+|---|---|---|
+| `--merge-mode` | `hybrid_seed` | Region construction strategy |
 
-Length / median-p filters:
-- `--min-dmr-length` (default: 0): minimum final DMR length (bp)
-- `--max-median-p` (default: 1.0): independent filter on DMR median p-value
+*Seed / Extension (core detection parameters):*
 
-Overlap merge (post-detection re-merge):
-- `--merge-overlaps`: re-merge overlapping/nearby same-direction DMRs
-- `--merge-overlaps-gap` (default: 0): allowed gap between DMRs during re-merge
+| Option | Default | Description |
+|---|---|---|
+| `--p-seed` | 0.05 | Significance threshold for seed window definition |
+| `--p-extend` | 0.05 | Significance threshold for region extension |
+| `--max-gap-bp` | 200 | Maximum gap (bp) between adjacent windows for merging |
+| `--min-windows` | 1 | Minimum number of windows required to report a DMR |
+| `--min-delta` | 0 | Minimum effect size threshold during extension |
+| `--max-p-degradation` | 1.2 | Maximum allowed increase in combined p-value during extension (1.0 = no worsening allowed) |
+| `--max-final-p` | 1.0 | Maximum combined p-value of a retained DMR |
+| `--min-strong-windows` | 0.5 | Minimum fraction of windows with p ≤ `--p-seed` in the final DMR |
 
-Output format (by mode):
+*Adaptive effect size filter (recommended for `multi_seed` and `hybrid_seed`):*
+
+| Option | Default | Description |
+|---|---|---|
+| `--adaptive-delta` | FALSE | Enable two-stage detection with data-driven effect size thresholding |
+| `--adaptive-delta-method` | `median_ratio` | Threshold method: `median_ratio`, `q50`, `q25`, `q10`, `mad` |
+| `--adaptive-delta-ratio` | 0.6 | Scaling ratio used in `median_ratio` method |
+
+> **How adaptive delta works:** A first pass detects candidate DMRs without any effect size filter. The median absolute Δmethylation across all candidate DMRs is then computed, and a minimum |Δmethylation| threshold (set to `--adaptive-delta-ratio` × median) is applied in a second pass, removing extensions driven by weak or inconsistent methylation changes. `q25` is a practical starting point for initial parameter tuning.
+
+*Multi-seed specific:*
+
+| Option | Default | Description |
+|---|---|---|
+| `--seed-min-windows` | 1 | Minimum number of seed windows required for `multi_seed` and `hybrid_seed` |
+
+*Post-filter (consistency checks after detection):*
+
+| Option | Default | Description |
+|---|---|---|
+| `--post-filter` | FALSE | Enable post-detection quality filtering |
+| `--min-median-p` | 0.01 | Maximum median p-value within a retained DMR |
+| `--min-consistent-frac` | 0.5 | Minimum fraction of windows with p ≤ `--p-seed` |
+
+*Length / median-p filters:*
+
+| Option | Default | Description |
+|---|---|---|
+| `--min-dmr-length` | 0 | Minimum final DMR length (bp) |
+| `--max-median-p` | 1.0 | Independent filter on DMR median p-value |
+
+*Overlap merge:*
+
+| Option | Default | Description |
+|---|---|---|
+| `--merge-overlaps` | FALSE | Re-merge overlapping/nearby same-direction DMRs after detection |
+| `--merge-overlaps-gap` | 0 | Maximum gap (bp) allowed between DMRs during re-merge |
+
+**Output format:**
+
 | File | Pattern | Description |
-| --- | --- | --- |
-| TSV | `*_dmrs_<mode>.tsv` | DMR table output |
-| BED | `*_dmrs_<mode>.bed` | Genome browser-compatible interval output |
+|---|---|---|
+| TSV | `*_dmrs_<mode>.tsv` | Full DMR table |
+| BED | `*_dmrs_<mode>.bed` | Genome browser-compatible intervals |
 
-Main TSV columns:
+**Main TSV output columns:**
 
 | Column | Description |
-| --- | --- |
+|---|---|
 | `chr` | Chromosome name |
 | `start` | DMR start position |
 | `end` | DMR end position |
 | `n_windows` | Number of windows included in the DMR |
-| `direction` | Direction of methylation difference |
-| `combined_p` | Combined p-value for the DMR |
+| `direction` | Direction of methylation change (`hyper` or `hypo`) |
+| `combined_p` | Stouffer-combined p-value for the DMR |
+| `delta` | Mean methylation difference across windows in the DMR |
 
-Example:
+**Example:**
+
 ```bash
 Rscript merge_window.R \
-  --windows glmm_out/WT_MT_CpG_fit_beta_aggregate.tsv.gz \
+  --windows glmm_out/WT_MT_CpG_fit_beta_site.tsv.gz \
   --out-prefix dmr_out/WT_MT_CpG \
   --merge-mode hybrid_seed \
   --p-seed 0.05 \
   --p-extend 0.05 \
-  --min-windows 1
+  --max-p-degradation 1.15 \
+  --max-final-p 0.0015 \
+  --min-strong-windows 0.5 \
+  --min-windows 1 \
+  --adaptive-delta
 ```
 
-## 3.6 `make_binned_methylation_bigwig.R` (optional)
+---
 
-- Converts site-level methylation (BinomTest TSV.gz output) into bin-wise mean methylation bigWig.
+### 3.6 `make_binned_methylation_bigwig.R` (optional)
 
-Options:
-- `-i, --input` (required): BinomTest result
-- `-b, --binsize` (default: 50): bin size
-- `-o, --output` (required): output bigWig
-- `--genome` (required): chrom.sizes
-- `--context` (default: `CpG`): `CpG/CHG/CHH`
+Converts per-site methylation data from BinomTest output into bin-wise mean methylation bigWig files for genome browser visualization.
 
-Example:
+**Options:**
+
+| Option | Default | Description |
+|---|---|---|
+| `-i, --input` | required | BinomTest result (`*_binomtest_result.tsv.gz`) |
+| `-b, --binsize` | 50 | Bin size (bp) |
+| `-o, --output` | required | Output bigWig file |
+| `--genome` | required | Chromosome sizes file (chrom.sizes) |
+| `--context` | `CpG` | Methylation context: `CpG`, `CHG`, or `CHH` |
+
+**Example:**
+
 ```bash
 Rscript make_binned_methylation_bigwig.R \
   -i binom/sample_binomtest_result.tsv.gz \
@@ -362,22 +495,26 @@ Rscript make_binned_methylation_bigwig.R \
   --context CpG
 ```
 
-## 3.7 `make_binned_variance_bigwig.py` (optional)
-Computes replicate variance from bin-averaged values across multiple bigWig tracks and writes a variance bigWig. Optional normalization with `--norm log2p1` is available.
+---
 
-Options:
-- `--inputs` (required): input bigWig files
-- `--output` (required): output bigWig
-- `--bin-size` (default: 200)
-- `--min-tracks` (default: 2)
-- `--norm` (default: `none`): `none` or `log2p1`
+### 3.7 `make_binned_variance_bigwig.py` (optional)
 
-Output format:
-| Item | Description |
-| --- | --- |
-| bigWig score | Per-bin variance across tracks |
+Computes replicate-level methylation variance from bin-averaged values across multiple bigWig tracks and writes a variance bigWig file. This is useful for visualizing regions of high replicate-level variability alongside DMR calls.
 
-Example:
+**Options:**
+
+| Option | Default | Description |
+|---|---|---|
+| `--inputs` | required | Input bigWig files (one per replicate) |
+| `--output` | required | Output variance bigWig |
+| `--bin-size` | 200 | Bin size (bp) |
+| `--min-tracks` | 2 | Minimum number of tracks required per bin |
+| `--norm` | `none` | Normalization: `none` or `log2p1` |
+
+**Output:** Per-bin variance across input tracks (score in bigWig format).
+
+**Example:**
+
 ```bash
 python make_binned_variance_bigwig.py \
   --inputs wig/rep1_CpG.bw \
@@ -390,15 +527,40 @@ python make_binned_variance_bigwig.py \
   --norm none
 ```
 
+---
+
 ## 4. Troubleshooting
 
-1) No windows after filtering
-- Cause: thresholds such as `--min_cov`, `--min_sites_win`, or replicate conditions are too strict.
-- Action: relax thresholds stepwise.
+**1) No windows remain after filtering**
 
-2) GLMM is slow / out of memory
-- Action: reduce `--workers`, increase `--batches`, and set `TMPDIR` to a fast location with sufficient capacity.
+- Cause: Thresholds such as `--min_cov`, `--min_sites_win`, or `--min_reps_g1`/`--min_reps_g2` may be too strict for the dataset.
+- Action: Relax thresholds stepwise. Check coverage distribution in your data before setting `--min_cov`.
 
-3) Chromosome mismatch during bigWig generation
-- Cause: chromosome names in inputs and chrom.sizes are inconsistent.
-- Action: harmonize naming and rerun.
+**2) GLMM fitting is slow or runs out of memory**
+
+- Action: Reduce `--workers`, increase `--batches`, and set `TMPDIR` to a fast storage location with sufficient capacity:
+
+```bash
+export TMPDIR=/path/to/large_storage/tmp
+mkdir -p "$TMPDIR"
+```
+
+**3) Beta regression fails to converge for many windows**
+
+- Cause: Beta regression can fail when methylation proportions are near 0 or 1, or when within-group variance is very low.
+- Action: This is expected behavior; such windows are automatically excluded from output. If a large fraction of windows fail, consider switching to `--family binom` as a fallback, or check that `--min_sites_win` and `--min_cov` are set appropriately.
+
+**4) Chromosome name mismatch during bigWig generation**
+
+- Cause: Chromosome names in input files and the chrom.sizes file are inconsistent (e.g., `chr1` vs. `1`).
+- Action: Harmonize chromosome naming across all input files and the reference chrom.sizes, then rerun.
+
+**5) Too many or too few DMRs detected**
+
+- Too many DMRs: Consider enabling `--adaptive-delta` or increasing `--max-final-p` stringency (lower value). Applying `--post-filter` with `--min-consistent-frac` can also reduce spurious detections.
+- Too few DMRs: Relax `--max-final-p`, reduce `--p-seed`, or switch from `single_seed` to `multi_seed` or `hybrid_seed`.
+
+**6) DMRs are highly fragmented**
+
+- Cause: The `single_seed` strategy with strict parameters may produce many small disconnected regions.
+- Action: Switch to `multi_seed` or `hybrid_seed`, increase `--max-gap-bp`, or enable `--merge-overlaps`.
