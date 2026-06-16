@@ -64,10 +64,12 @@ cd glmmDMR
 **Optional: set executable flags**
 
 ```bash
-chmod +x summarize_extractor.py BinomTest.py prepare_matrix.sh
-chmod +x run_glmmDMR.R merge_window.R
-chmod +x make_binned_methylation_bigwig.R make_binned_variance_bigwig.py
+chmod +x scripts/summarize_extractor.py scripts/BinomTest.py scripts/prepare_matrix.sh
+chmod +x scripts/run_glmmDMR.R scripts/merge_window.R
+chmod +x scripts/make_binned_methylation_bigwig.R scripts/make_binned_variance_bigwig.py scripts/modkit_bed_to_binom_input.py
 ```
+
+No additional Python packages are required for ONT conversion; `modkit_bed_to_binom_input.py` uses `pandas` only (already included above).
 
 **Python dependencies:**
 
@@ -95,11 +97,12 @@ BiocManager::install(c("GenomicRanges", "rtracklayer"))
 ## 3. Quick Environment Check
 
 ```bash
-python summarize_extractor.py --help
-python BinomTest.py --help
-bash prepare_matrix.sh --help
-Rscript run_glmmDMR.R --help
-Rscript merge_window.R --help
+python scripts/summarize_extractor.py --help
+python scripts/BinomTest.py --help
+python scripts/modkit_bed_to_binom_input.py --help
+bash scripts/prepare_matrix.sh --help
+Rscript scripts/run_glmmDMR.R --help
+Rscript scripts/merge_window.R --help
 ```
 
 ---
