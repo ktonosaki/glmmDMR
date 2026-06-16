@@ -2,7 +2,7 @@
 
 # glmmDMR
 
-glmmDMR is a statistical framework for replicate-aware detection of differentially methylated regions (DMRs) from whole-genome bisulfite sequencing (WGBS) or enzymatic methyl-seq (EM-seq) data. The framework integrates generalized linear mixed models (GLMMs) with a seed-based region construction strategy to improve detection accuracy and reduce false positives driven by replicate-level methylation variability.
+glmmDMR is a statistical framework for replicate-aware detection of differentially methylated regions (DMRs) from whole-genome bisulfite sequencing (WGBS),  enzymatic methyl-seq (EM-seq) or Oxford Nanopore Technologies (ONT) data. The framework integrates generalized linear mixed models (GLMMs) with a seed-based region construction strategy to improve detection accuracy and reduce false positives driven by replicate-level methylation variability.
 
 glmmDMR consists of three core components:
 
@@ -68,8 +68,6 @@ chmod +x scripts/summarize_extractor.py scripts/BinomTest.py scripts/prepare_mat
 chmod +x scripts/run_glmmDMR.R scripts/merge_window.R
 chmod +x scripts/make_binned_methylation_bigwig.R scripts/make_binned_variance_bigwig.py scripts/modkit_bed_to_binom_input.py
 ```
-
-No additional Python packages are required for ONT conversion; `modkit_bed_to_binom_input.py` uses `pandas` only (already included above).
 
 **Python dependencies:**
 
@@ -237,7 +235,7 @@ Fits a GLMM to each window to test for differential methylation between groups w
 
 The **beta site-level** configuration (`--family beta --mode site`) is recommended based on benchmarking: it maintains the highest precision across a wide range of effect sizes and most effectively suppresses false positives driven by high methylation variance.
 
-Group differences are modeled as fixed effects; biological replicates are modeled as random intercepts ($u_i \sim N(0, \sigma^2)$). Statistical significance is assessed by likelihood ratio test, with p-values adjusted using the Benjamini–Hochberg method.
+Group differences are modeled as fixed effects; biological replicates are modeled as random intercepts. Statistical significance is assessed by likelihood ratio test, with p-values adjusted using the Benjamini–Hochberg method.
 
 **Input:** Sliding-window matrix TSV.GZ from `prepare_matrix.sh`
 
@@ -296,7 +294,7 @@ Integrates window-level GLMM statistics into DMRs using a seed-based region cons
 | `--min-strong-windows` | 0.5 | Minimum fraction of windows with p ≤ `--p-seed` |
 | `--min-windows` | 1 | Minimum number of windows per DMR |
 
-**Adaptive effect size filter** (recommended for `multi_seed` and `hybrid_seed`):
+**Adaptive effect size filter**:
 
 | Option | Default | Description |
 |---|---|---|
