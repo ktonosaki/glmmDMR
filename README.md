@@ -35,6 +35,7 @@ glmmDMR consists of three core components:
 | Script | Description |
 |---|---|
 | `summarize_extractor.py` | Summarize Bismark extractor output (`*.txt.gz`) into per-site methylation counts |
+| `modkit_bed_to_binom_input.py` | (Optional, ONT) Convert modkit pileup BED to per-site counts for `BinomTest.py` |
 | `BinomTest.py` | Per-site binomial test with bisulfite non-conversion correction and FDR filtering |
 | `prepare_matrix.sh` | Build two-group sliding-window matrices from per-site data |
 | `run_glmmDMR.R` | Fit GLMM per window; supports `binom`/`beta` × `aggregate`/`site` configurations |
@@ -143,6 +144,19 @@ python summarize_extractor.py \
   -o sample_summarized_output.tsv.gz \
   --threads 4
 ```
+
+**Optional (ONT / modkit pileup BED):**
+
+If your input is ONT methylation calls from `modkit pileup` (BED/BED.GZ), convert it to the same Step-1 output format (`chr, pos, strand, meth, unmeth, context`) before running `BinomTest.py`.
+
+```bash
+python scripts/modkit_bed_to_binom_input.py \
+  -i sample_modkit_pileup.bed \
+  -o sample_summarized_output.tsv.gz \
+  --min_coverage 5
+```
+
+Then proceed to Step 2 exactly as in the standard workflow.
 
 ---
 
