@@ -33,9 +33,9 @@ Rscript 05.evaluate_dmrs.R \
 
 **Input:** `sites_CG.tsv.gz` from the simulation
 
-**Output:** 
+Output:
 - `output_for_DSS/sites_CG_forDSS.tsv` (DSS format)
-- `output_for_methylKit/sites_CG_forMethylKit_*.txt` (methylKit format, one per sample)
+- `output_for_methylKit/sites_CG_forMethylKit_*.txt` (methylKit format, one file per sample)
 
 **Usage:**
 ```bash
@@ -50,7 +50,7 @@ Rscript 03.convert_sites_for_otherSoft.R <path/to/sites_CG.tsv.gz>
 
 **Input:** `output_for_DSS/sites_CG_forDSS.tsv` (created by 03.convert_sites_for_otherSoft.R)
 
-**Output:**
+Output:
 - `output_for_DSS/DSS_dmlTest.tsv` (site-level results)
 - `output_for_DSS/DSS_dmrs.tsv` (DMR regions)
 
@@ -73,7 +73,7 @@ Rscript 04.run_DSS.R
 
 **Input:** `output_for_methylKit/sites_CG_forMethylKit_*.txt` files (created by 03.convert_sites_for_otherSoft.R)
 
-**Output:**
+Output:
 - `output_for_methylKit/methylKit_diff.tsv` (tile-level differential methylation results)
 
 **Usage:**
@@ -98,10 +98,10 @@ Rscript 04.run_methylKit.R
 - Stouffer combined p-value method
 - Combined delta + p-value method
 
-**Output:**
-- `<prefix>_distribution.pdf` — DMR size and count distributions
-- `<prefix>_performance.pdf` — Sensitivity/specificity/precision curves
-- `<prefix>_summary.tsv` — Summary statistics per method
+Output:
+- `<prefix>_distribution.pdf`: DMR size and count distributions
+- `<prefix>_performance.pdf`: Sensitivity, specificity, and precision curves
+- `<prefix>_summary.tsv`: Summary statistics per method
 
 **Usage:**
 ```bash
@@ -166,13 +166,13 @@ ls -lh results/
 
 All scripts require R and the following packages:
 
-- **data.table** — Fast data manipulation
-- **tidyr** — Data tidying
-- **stringr** — String operations
-- **ggplot2** — Visualization
-- **optparse** — Command-line argument parsing
-- **DSS** — For 04.run_DSS.R
-- **methylKit** — For 04.run_methylKit.R
+- **data.table**: Fast data manipulation
+- **tidyr**: Data tidying
+- **stringr**: String operations
+- **ggplot2**: Visualization
+- **optparse**: Command-line argument parsing
+- **DSS**: Required for 04.run_DSS.R
+- **methylKit**: Required for 04.run_methylKit.R
 
 ### Install missing packages:
 
@@ -193,7 +193,7 @@ Rscript -e "
 
 ## Notes
 
-- All scripts assume sample groups: `WT01–WT04` (wild-type) and `MT01–MT04` (mutant).
+- All scripts assume sample groups `WT01-WT04` (wild-type) and `MT01-MT04` (mutant).
 - Modify sample names in scripts if using different group/replicate structures.
 - Output directories (e.g., `output_for_DSS/`) are created automatically.
 - For reproducibility, document tool versions and random seeds used.

@@ -52,7 +52,7 @@ fwrite(MT4, file = "output_for_methylKit/sites_CG_forMethylKit_MT4.txt", sep = "
 dir.create("output_for_metilene", showWarnings=FALSE)
 #fwrite(meta_wide, file = "output_for_metilene/sites_CG_forMetilene.txt", sep = "\t", na = "NA")
 
-# メチル化率を計算
+# Calculate methylation percentage
 DT[, rate := meth / (meth + unmeth)]
 wide <- dcast(DT, chr + pos ~ sample, value.var = "rate")
 wide[, `:=`(start = pos, end = pos)]

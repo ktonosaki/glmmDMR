@@ -1,9 +1,9 @@
 #!/usr/bin/env Rscript
 
 suppressPackageStartupMessages({
-  library(optparse)   # コマンドライン引数処理
-  library(data.table) # データ操作
-  library(ggplot2)    # プロット作成
+  library(optparse)   # Command-line argument parsing
+  library(data.table) # Data processing
+  library(ggplot2)    # Plotting
 })
 
 #========================= Options =============================================
@@ -34,14 +34,14 @@ if (is.null(opt$simes) || is.null(opt$stouffer) || is.null(opt$combined)) {
 load_dmrs <- function(path, method) {
   message("[INFO] Loading DMRs from: ", path)
   dt <- fread(path)
-  dt[, method := method] # 手法名を追加
+  dt[, method := method] # Add method label
   return(dt)
 }
 
 plot_dmr_distributions <- function(dmrs, out_prefix) {
   cat("[INFO] Generating DMR distribution plots\n")
   
-  # 長さ分布のヒストグラム
+  # Histogram of DMR lengths
   dmrs[, length_bp := end - start + 1]
   p1 <- ggplot(dmrs, aes(x = length_bp, fill = method)) +
     geom_histogram(bins = 50, alpha = 0.7, position = "identity") +
@@ -49,13 +49,13 @@ plot_dmr_distributions <- function(dmrs, out_prefix) {
     labs(title = "DMR Length Distribution", x = "Log10 Length (bp)", y = "Count") +
     theme_minimal()
   
-  # スタート位置の分布
+  # Distribution of DMR start positions
   p2 <- ggplot(dmrs, aes(x = start, fill = method)) +
     geom_histogram(bins = 50, alpha = 0.7, position = "identity") +
     labs(title = "DMR Start Position Distribution", x = "Start Position", y = "Count") +
     theme_minimal()
   
-  # PDFで保存
+  # Save plots as PDF
   ggsave(sprintf("%s_dmr_length_distribution.pdf", out_prefix), p1, width = 8, height = 5)
   ggsave(sprintf("%s_dmr_start_distribution.pdf", out_prefix), p2, width = 8, height = 5)
 }
@@ -74,10 +74,10 @@ summarize_dmrs <- function(dmrs) {
 compare_methods <- function(dmrs_simes, dmrs_stouffer, dmrs_combined) {
   cat("[INFO] Comparing detection methods\n")
   
-  # 方法のマージ
+  # Merge methods into one table
   all_dmrs <- rbind(dmrs_simes, dmrs_stouffer, dmrs_combined, fill = TRUE)
   
-  # メソッドごとのユニークDMR数と重複領域数
+  # Count unique and overlapping DMRs by method
   all_dmrs[, overlap := .N > 1, by = .(chr, start, end)]
   
   comparison_table <- all_dmrs[, .(

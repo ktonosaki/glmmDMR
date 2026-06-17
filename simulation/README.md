@@ -246,9 +246,9 @@ This section describes how to benchmark glmmDMR against other commonly used DMR 
 
 The benchmarking workflow has three main stages:
 
-1. **Data Format Conversion** → Convert simulated site-level data into tool-specific formats
-2. **Run Comparison Tools** → Execute each DMR detection method independently
-3. **Evaluate Results** → Compare performance (sensitivity, specificity, runtime, etc.)
+1. Data format conversion: convert simulated site-level data into tool-specific formats.
+2. Run comparison tools: execute each DMR detection method independently.
+3. Evaluate results: compare performance such as sensitivity, specificity, and runtime.
 
 All scripts are located in the `benchmarking/` subdirectory.
 
@@ -287,10 +287,10 @@ Rscript 03.convert_sites_for_otherSoft.R ../results/site_window_sim/tsv/sites_CG
 The script creates two directories:
 
 - `output_for_DSS/`
-  - `sites_CG_forDSS.tsv` — Format for DSS (columns: chr, pos, N, X, sample)
+  - `sites_CG_forDSS.tsv`: format for DSS (columns: chr, pos, N, X, sample)
 
 - `output_for_methylKit/`
-  - `sites_CG_forMethylKit_{MT1,MT2,MT3,MT4,WT1,WT2,WT3,WT4}.txt` — Per-sample methylKit format
+  - `sites_CG_forMethylKit_{MT1,MT2,MT3,MT4,WT1,WT2,WT3,WT4}.txt`: per-sample methylKit format
   - Columns: chrBase, chr, base, strand, coverage, freqC, freqT
 
 **Note:** The script includes conversion logic for metilene and other tools as well; extend as needed.
@@ -321,8 +321,8 @@ Rscript 04.run_DSS.R
   - Minimum CpG count: 3
 
 **Outputs:**
-- `output_for_DSS/DSS_dmlTest.tsv` — Site-level test results
-- `output_for_DSS/DSS_dmrs.tsv` — Detected DMRs
+- `output_for_DSS/DSS_dmlTest.tsv`: site-level test results
+- `output_for_DSS/DSS_dmrs.tsv`: detected DMRs
 
 **Customization:** Edit script to adjust `p.threshold`, `minlen`, `minCG`, `dis.merge` parameters.
 
@@ -346,7 +346,7 @@ Rscript 04.run_methylKit.R
 - Calls differential methylation with `qvalue=0.05`
 
 **Outputs:**
-- `output_for_methylKit/methylKit_diff.tsv` — Tile-level results
+- `output_for_methylKit/methylKit_diff.tsv`: tile-level results
 
 **Customization:** Edit script to adjust tile size (`win.size`), step (`step.size`), or q-value threshold.
 
@@ -376,9 +376,9 @@ Rscript 05.evaluate_dmrs.R \
 - Each file represents one DMR detection method or statistical approach
 
 **Outputs:**
-- `dmr_eval_distribution.pdf` — DMR length/count distributions by method
-- `dmr_eval_performance.pdf` — Sensitivity/specificity/precision curves
-- `dmr_eval_summary.tsv` — Summary statistics (count, median length, etc.)
+- `dmr_eval_distribution.pdf`: DMR length and count distributions by method
+- `dmr_eval_performance.pdf`: sensitivity, specificity, and precision curves
+- `dmr_eval_summary.tsv`: summary statistics such as count and median length
 
 **Comparison Metrics:**
 - **Sensitivity:** Fraction of true DMRs detected
@@ -433,7 +433,7 @@ To integrate a new DMR detection tool:
 
 ## Notes
 
-- All scripts assume the same sample labels and group structure: `WT01–WT04` (group 1) and `MT01–MT04` (group 2).
+- All scripts assume the same sample labels and group structure: `WT01-WT04` (group 1) and `MT01-MT04` (group 2).
 - Paths to input/output directories can be customized by editing the scripts.
 - For reproducible benchmarking, ensure all random seeds are fixed and tool versions are documented.
 

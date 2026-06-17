@@ -30,7 +30,7 @@ filtered.myobj=filterByCoverage(myobjDB,lo.count=5,lo.perc=NULL,
 
 meth=unite(filtered.myobj, destrand=FALSE)
 
-# 差分メチル化
+# Differential methylation
 #myDiff=calculateDiffMeth(meth)
 
 #myDiff25p=getMethylDiff(myDiff,difference=25,qvalue=0.01)
