@@ -92,3 +92,28 @@ fwrite(MT1, file = "output_for_DMRfinder/sites_CG_forDMRfinder_MT1.txt", sep = "
 fwrite(MT2, file = "output_for_DMRfinder/sites_CG_forDMRfinder_MT2.txt", sep = "\t", col.names = FALSE)
 fwrite(MT3, file = "output_for_DMRfinder/sites_CG_forDMRfinder_MT3.txt", sep = "\t", col.names = FALSE)
 fwrite(MT4, file = "output_for_DMRfinder/sites_CG_forDMRfinder_MT4.txt", sep = "\t", col.names = FALSE)
+
+
+# --- MACAU2 format ---
+dir.create("output_for_MACAU", showWarnings = FALSE)
+macau_df <- DT[, .(chr, start = pos, end = pos + 1,
+             meth_rate = meth / (meth + unmeth),
+             coverage = meth + unmeth, sample)]
+
+fwrite(macau_df[sample == "WT01", .(chr, start, end, meth_rate, coverage)],
+    file = "output_for_MACAU/windows_CG_forMACAU_WT01.bed", sep = "\t", col.names = FALSE)
+fwrite(macau_df[sample == "WT02", .(chr, start, end, meth_rate, coverage)],
+    file = "output_for_MACAU/windows_CG_forMACAU_WT02.bed", sep = "\t", col.names = FALSE)
+fwrite(macau_df[sample == "WT03", .(chr, start, end, meth_rate, coverage)],
+    file = "output_for_MACAU/windows_CG_forMACAU_WT03.bed", sep = "\t", col.names = FALSE)
+fwrite(macau_df[sample == "WT04", .(chr, start, end, meth_rate, coverage)],
+    file = "output_for_MACAU/windows_CG_forMACAU_WT04.bed", sep = "\t", col.names = FALSE)
+
+fwrite(macau_df[sample == "MT01", .(chr, start, end, meth_rate, coverage)],
+    file = "output_for_MACAU/windows_CG_forMACAU_MT01.bed", sep = "\t", col.names = FALSE)
+fwrite(macau_df[sample == "MT02", .(chr, start, end, meth_rate, coverage)],
+    file = "output_for_MACAU/windows_CG_forMACAU_MT02.bed", sep = "\t", col.names = FALSE)
+fwrite(macau_df[sample == "MT03", .(chr, start, end, meth_rate, coverage)],
+    file = "output_for_MACAU/windows_CG_forMACAU_MT03.bed", sep = "\t", col.names = FALSE)
+fwrite(macau_df[sample == "MT04", .(chr, start, end, meth_rate, coverage)],
+    file = "output_for_MACAU/windows_CG_forMACAU_MT04.bed", sep = "\t", col.names = FALSE)

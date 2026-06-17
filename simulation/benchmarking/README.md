@@ -13,6 +13,25 @@ Rscript 03.convert_sites_for_otherSoft.R ../results/site_window_sim/tsv/sites_CG
 # 2. Run each comparison tool
 Rscript 04.run_DSS.R
 Rscript 04.run_methylKit.R
+Rscript run_fisher.R \
+  -i ../results/site_window_sim/tsv/windows_CG.tsv.gz \
+  --input_type windows \
+  -c CG \
+  -o output_for_fisher/fisher_out.tsv \
+  --merge_dmrs \
+  --fdr_threshold 0.05 \
+  --max_gap_bp 300 \
+  --min_windows 1 \
+  --threads 8
+Rscript 04.run_metilene.R \
+  --metilene-bin /path/to/metilene \
+  --metilene-output-pl /path/to/metilene_output.pl
+Rscript 04.run_dmrfinder.R \
+  --python-bin python \
+  --combine-script /path/to/combine_CpG_sites.py \
+  --finddmrs-script /path/to/findDMRs_fixed.r
+Rscript 04.run_MACAU2.R \
+  --macau2-r-dir /path/to/MACAU2/R
 
 # 3. Run glmmDMR on the same data (outside this directory)
 # Rscript ../scripts/run_glmmDMR.R [options...]
@@ -36,6 +55,9 @@ Rscript 05.evaluate_dmrs.R \
 Output:
 - `output_for_DSS/sites_CG_forDSS.tsv` (DSS format)
 - `output_for_methylKit/sites_CG_forMethylKit_*.txt` (methylKit format, one file per sample)
+- `output_for_metilene/sites_CG_forMetilene.txt` (metilene format)
+- `output_for_DMRfinder/sites_CG_forDMRfinder_*.txt` (DMRfinder format, one file per sample)
+- `output_for_MACAU/windows_CG_forMACAU_*.bed` (MACAU2 format, one file per sample)
 
 **Usage:**
 ```bash
@@ -86,6 +108,96 @@ Rscript 04.run_methylKit.R
 - `step.size`: tile step size (default: 200 bp)
 - `qvalue`: q-value threshold (default: 0.05)
 - Coverage filters: `lo.count=5`, `hi.perc=99.9`
+
+---
+
+### run_fisher.R
+
+Purpose: Run Fisher's exact test on site-level or window-level methylation input.
+
+Input:
+- Window mode: one windows file with both groups.
+- Site mode: one sites file with both groups, then automatic aggregation by window size.
+
+Output:
+- Main result TSV from `--output_file`.
+- Optional DMR outputs when `--merge_dmrs` is set:
+  - `<output>_dmrs.tsv`
+  - `<output>_dmrs.bed`
+
+Usage (window input):
+```bash
+Rscript run_fisher.R \
+  -i ../results/site_window_sim/tsv/windows_CG.tsv.gz \
+  --input_type windows \
+  -c CG \
+  -o output_for_fisher/fisher_out.tsv \
+  --merge_dmrs \
+  --fdr_threshold 0.05 \
+  --max_gap_bp 300 \
+  --min_windows 1 \
+  --threads 8
+```
+
+---
+
+### 04.run_metilene.R
+
+Purpose: Run metilene on the converted matrix.
+
+Input:
+- `output_for_metilene/sites_CG_forMetilene.txt`
+
+Output:
+- `output_for_metilene/metilene_out.tsv`
+- `output_for_metilene/sites_CG_forMetilene.filter`
+
+Usage:
+```bash
+Rscript 04.run_metilene.R \
+  --metilene-bin /path/to/metilene \
+  --metilene-output-pl /path/to/metilene_output.pl
+```
+
+---
+
+### 04.run_dmrfinder.R
+
+Purpose: Run DMRfinder using combined CpG matrix and fixed DMR caller.
+
+Input:
+- `output_for_DMRfinder/sites_CG_forDMRfinder_*.txt`
+
+Output:
+- `output_for_DMRfinder/out_findDMRs.txt`
+
+Usage:
+```bash
+Rscript 04.run_dmrfinder.R \
+  --python-bin python \
+  --combine-script /path/to/combine_CpG_sites.py \
+  --finddmrs-script /path/to/findDMRs_fixed.r
+```
+
+---
+
+### 04.run_MACAU2.R
+
+Purpose: Run MACAU2 site-level differential methylation and optional site merge.
+
+Input:
+- `output_for_MACAU/windows_CG_forMACAU_*.bed`
+
+Output:
+- `output_for_MACAU/MACAU2_sites.tsv`
+- `output_for_MACAU/MACAU2_sig_sites.tsv`
+- `output_for_MACAU/MACAU2_sig_windows_merged.tsv` (if significant sites exist)
+
+Usage:
+```bash
+Rscript 04.run_MACAU2.R \
+  --macau2-r-dir /path/to/MACAU2/R
+```
 
 ---
 
@@ -145,6 +257,37 @@ time Rscript 04.run_DSS.R
 echo "Running methylKit..."
 time Rscript 04.run_methylKit.R
 
+# Run Fisher
+echo "Running Fisher..."
+time Rscript run_fisher.R \
+  -i ../test_sim/tsv/windows_CG.tsv.gz \
+  --input_type windows \
+  -c CG \
+  -o output_for_fisher/fisher_out.tsv \
+  --merge_dmrs \
+  --fdr_threshold 0.05 \
+  --max_gap_bp 300 \
+  --min_windows 1 \
+  --threads 8
+
+# Run metilene
+echo "Running metilene..."
+time Rscript 04.run_metilene.R \
+  --metilene-bin /path/to/metilene \
+  --metilene-output-pl /path/to/metilene_output.pl
+
+# Run DMRfinder
+echo "Running DMRfinder..."
+time Rscript 04.run_dmrfinder.R \
+  --python-bin python \
+  --combine-script /path/to/combine_CpG_sites.py \
+  --finddmrs-script /path/to/findDMRs_fixed.r
+
+# Run MACAU2
+echo "Running MACAU2..."
+time Rscript 04.run_MACAU2.R \
+  --macau2-r-dir /path/to/MACAU2/R
+
 # (Run glmmDMR in a separate workflow)
 # ... glmmDMR results should be in ../glmmDMR_results/
 
@@ -173,6 +316,10 @@ All scripts require R and the following packages:
 - **optparse**: Command-line argument parsing
 - **DSS**: Required for 04.run_DSS.R
 - **methylKit**: Required for 04.run_methylKit.R
+- **dplyr**, **readr**, **future**, **furrr**: Required for run_fisher.R
+- **MACAU2**: Required for 04.run_MACAU2.R
+- **metilene** binary and `metilene_output.pl`: Required for 04.run_metilene.R
+- **DMRfinder** scripts `combine_CpG_sites.py` and `findDMRs_fixed.r`: Required for 04.run_dmrfinder.R
 
 ### Install missing packages:
 
