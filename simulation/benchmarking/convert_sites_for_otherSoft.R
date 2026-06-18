@@ -18,15 +18,6 @@ df <- DT[, .(chrBase=paste(chr, pos, sep = "_"), chr, base=pos, strand="R", cove
              freqC=(meth/(meth + unmeth)) * 100, freqT=(unmeth/(meth + unmeth))*100, sample)]
 dir.create("output_for_methylKit", showWarnings=FALSE)
 
-
-
-##         chrBase   chr    base strand coverage freqC  freqT
-## 1 chr21.9764539 chr21 9764539      R       12 25.00  75.00
-## 2 chr21.9764513 chr21 9764513      R       12  0.00 100.00
-## 3 chr21.9820622 chr21 9820622      F       13  0.00 100.00
-## 4 chr21.9837545 chr21 9837545      F       11  0.00 100.00
-## 5 chr21.9849022 chr21 9849022      F      124 72.58  27.42
-
 WT1 <- df[df$sample == "WT01", .(chrBase,chr,base,strand,coverage,freqC,freqT)]
 WT2 <- df[df$sample == "WT02",.(chrBase,chr,base,strand,coverage,freqC,freqT)]
 WT3 <- df[df$sample == "WT03",.(chrBase,chr,base,strand,coverage,freqC,freqT)]
@@ -48,9 +39,7 @@ fwrite(MT3, file = "output_for_methylKit/sites_CG_forMethylKit_MT3.txt", sep = "
 fwrite(MT4, file = "output_for_methylKit/sites_CG_forMethylKit_MT4.txt", sep = "\t")
 
 # --- metilene format ---
-
 dir.create("output_for_metilene", showWarnings=FALSE)
-#fwrite(meta_wide, file = "output_for_metilene/sites_CG_forMetilene.txt", sep = "\t", na = "NA")
 
 # Calculate methylation percentage
 DT[, rate := meth / (meth + unmeth)]
@@ -61,14 +50,8 @@ setorder(wide, chr, start)
 out <- wide[, c(1:10)]
 
 fwrite(out, file = "output_for_metilene/sites_CG_forMetilene.txt", sep = "\t", quote = FALSE, na = "NA")
-#message("Written metilene input to ", outfile)
-
-
-
 
 # --- DMRfinder format ---
-#dmrf_out <- DT[, .(chr, pos, pos+1, rate = meth /(meth + unmeth), meth, unmeth, sample)]
-#df <- DT[, .(chr, pos, meth, unmeth, sample)]
 df <- DT[, .(chr, pos, end=pos+1, pct=meth /(meth + unmeth), meth, unmeth, sample)]
 WT1 <- df[df$sample == "WT01",.(chr, pos, end, pct, meth, unmeth)]
 WT2 <- df[df$sample == "WT02",.(chr, pos, end, pct, meth, unmeth)]
@@ -79,8 +62,6 @@ MT1 <- df[df$sample == "MT01",.(chr, pos, end, pct, meth, unmeth)]
 MT2 <- df[df$sample == "MT02",.(chr, pos, end, pct, meth, unmeth)]
 MT3 <- df[df$sample == "MT03",.(chr, pos, end, pct, meth, unmeth)]
 MT4 <- df[df$sample == "MT04",.(chr, pos, end, pct, meth, unmeth)]
-
-
 
 dir.create("output_for_DMRfinder", showWarnings=FALSE)
 fwrite(WT1, file = "output_for_DMRfinder/sites_CG_forDMRfinder_WT1.txt", sep = "\t", col.names = FALSE)

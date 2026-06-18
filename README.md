@@ -2,7 +2,7 @@
 
 # glmmDMR
 
-glmmDMR is a statistical framework for replicate-aware detection of differentially methylated regions (DMRs) from whole-genome bisulfite sequencing (WGBS),  enzymatic methyl-seq (EM-seq) or Oxford Nanopore Technologies (ONT) data. The framework integrates generalized linear mixed models (GLMMs) with a seed-based region construction strategy to improve detection accuracy and reduce false positives driven by replicate-level methylation variability.
+glmmDMR is a statistical framework for replicate-aware detection of differentially methylated regions (DMRs) from whole-genome bisulfite sequencing (WGBS), enzymatic methyl-seq (EM-seq), or Oxford Nanopore Technologies (ONT) methylation data. The framework integrates generalized linear mixed models (GLMMs) with a seed-based region construction strategy to improve detection accuracy and reduce false positives driven by replicate-level methylation variability.
 
 glmmDMR consists of three core components:
 
@@ -10,7 +10,7 @@ glmmDMR consists of three core components:
 2. **Replicate-aware statistical modeling**: methylation data within each window are modeled using a GLMM that treats group identity as a fixed effect and biological replicates as random effects, explicitly capturing replicate-level variability without prior aggregation.
 3. **Seed-based DMR construction**: window-level statistical signals are integrated into DMRs using one of three seed strategies — `single_seed`, `multi_seed`, or `hybrid_seed` — each initiating region construction from locally high-confidence windows and expanding based on directional consistency and Stouffer-combined p-values.
 
-> **Key finding**: False-positive DMR detections arise predominantly from genomic regions with high replicate-level methylation variability, not from regions with weak biological signals. glmmDMR addresses this directly through GLMM-based variance modeling.
+> **Key finding**: False-positive DMR detections are strongly associated with genomic regions showing high replicate-level methylation variability, rather than simply with weak methylation differences. glmmDMR addresses this directly through GLMM-based variance modeling.
 
 ---
 
@@ -24,7 +24,8 @@ glmmDMR consists of three core components:
 6. [Runtime Notes](#6-runtime-notes)
 7. [Simulation and Benchmarking](#7-simulation-and-benchmarking)
 8. [Citation](#8-citation)
-9. [License](#9-license)
+9. [Authors](#9-authors)
+10. [License](#10-license)
 
 ---
 
@@ -390,13 +391,20 @@ For details on benchmarking methodology and comparison with existing DMR detecti
 
 ## 8. Citation
 
-If you use glmmDMR in your research, please cite:
-
-> [Author names] (2025). glmmDMR: a GLMM-based framework for replicate-aware detection of differentially methylated regions. ****. [DOI upon publication]
+A manuscript describing glmmDMR is currently under review.
 
 ---
 
-## 9. License
+## 9. Authors
+
+glmmDMR was developed by Kaoru Tonosaki  
+(Kihara Institute for Biological Research, Yokohama City University).
+
+For questions, bug reports, or feature requests, please open an issue on GitHub.
+
+---
+
+## 10. License
 
 glmmDMR is released under the MIT License. See [LICENSE](LICENSE) for details.
 

@@ -107,7 +107,7 @@ Rscript run_dmrfinder.R \
 MACAU2:
 
 ```bash
-Rscript 04.run_MACAU2.R \
+Rscript run_MACAU2.R \
   --macau2-r-dir /path/to/MACAU2/R
 ```
 
