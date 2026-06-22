@@ -149,9 +149,9 @@ python summarize_extractor.py \
 
 **Optional (ONT / modkit pileup BED):**
 
-If your input is ONT methylation calls from [modkit](https://github.com/nanoporetech/modkit) `pileup` (BED/BED.GZ), convert it to the same Step-1 output format (`chr, pos, strand, meth, unmeth, context`) before running `BinomTest.py`.
+If your input is ONT methylation calls from [modkit](https://github.com/nanoporetech/modkit) `pileup` (BED/BED.GZ), convert it to the same Step-1 output format (`chr, pos, strand, meth, unmeth, context`).
 
-For ONT-derived counts, running `BinomTest.py` is also recommended in this workflow to keep the same site-level significance filtering step before window construction (Iwamura et al., *Hort J.* (2026), https://doi.org/10.2503/hortj.szd-125)
+
 
 ```bash
 python scripts/modkit_bed_to_binom_input.py \
@@ -167,6 +167,8 @@ Then proceed to Step 2 exactly as in the standard workflow.
 ### Step 2: `BinomTest.py`
 
 Performs a per-site binomial test to identify cytosines with methylation levels significantly above the bisulfite non-conversion rate. Non-significant sites are retained in the output but have their `meth` count set to `0`, ensuring they do not contribute to downstream window-level signal while preserving coverage information.
+
+For ONT-derived counts, running `BinomTest.py` is also recommended in this workflow to keep the same site-level significance filtering step before window construction (Iwamura et al., *Hort J.* (2026), https://doi.org/10.2503/hortj.szd-125)
 
 **Input:** `*_summarized_output.tsv.gz`
 
