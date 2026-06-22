@@ -7,6 +7,7 @@ This README mirrors the practical workflow used in bash_variance.sh and clarifie
 ## Files in this directory
 
 - run_DSS.R
+- convert_sites_for_otherSoft.R
 - run_methylKit.R
 - run_fisher.R
 - run_metilene.R
@@ -16,7 +17,7 @@ This README mirrors the practical workflow used in bash_variance.sh and clarifie
 
 ## Important compatibility notes
 
-- Use the file names above exactly. Some older notes refer to 04.run_DSS.R, 04.run_methylKit.R, and 05.evaluate_dmrs.R, but this directory uses run_DSS.R, run_methylKit.R, and evaluate_dmrs.R.
+- Use the file names above exactly. Some older notes refer to 03.convert_sites_for_otherSoft.R, 04.run_DSS.R, and 04.run_methylKit.R, but this directory uses convert_sites_for_otherSoft.R, run_DSS.R, and run_methylKit.R.
 - MACAU2 is site-level analysis. The script also writes merged significant windows as a convenience output.
 
 ## External tools and scripts required
@@ -62,7 +63,7 @@ if (!require('methylKit', quietly=TRUE)) BiocManager::install('methylKit')
 ### 1. Convert site data to tool-specific inputs
 
 ```bash
-Rscript 03.convert_sites_for_otherSoft.R ../tsv/site_window_sim/tsv/sites_CG.tsv.gz
+Rscript convert_sites_for_otherSoft.R ../tsv/sites_CG.tsv.gz
 ```
 
 This creates:
@@ -86,6 +87,12 @@ methylKit:
 ```bash
 Rscript run_methylKit.R
 ```
+
+Outputs:
+
+- output_for_methylKit/methylKit_diff.tsv
+- output_for_methylKit/methylKit_dmrs.tsv
+- output_for_methylKit/methylKit_dmrs_merged.tsv
 
 metilene:
 
@@ -130,17 +137,17 @@ Rscript run_fisher.R \
 ## What is additionally processed in wrapper scripts
 Compared with direct bash lines, wrappers handle these processing details:
 
-- 04.run_dmrfinder.R
+- run_dmrfinder.R
   - Runs combine_CpG_sites.py
   - Applies sample-name cleanup in results.mod.csv
   - Appends one dummy row for chr1-only edge cases
   - Runs findDMRs_fixed.r
 
-- 04.run_metilene.R
+- run_metilene.R
   - Runs metilene and writes metilene_out.tsv
   - Runs metilene_output.pl and writes filter output
 
-- 04.run_MACAU2.R
+- run_MACAU2.R
   - Builds count and coverage matrices from per-sample BED files
   - Runs MACAU2 in BMM mode
   - Writes site-level results and merged significant windows

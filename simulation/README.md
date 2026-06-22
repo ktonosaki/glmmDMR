@@ -268,7 +268,7 @@ Rscript -e "
 
 Convert the simulated site-level data into the input formats required by each comparison tool.
 
-### Script: `benchmarking/03.convert_sites_for_otherSoft.R`
+### Script: `benchmarking/convert_sites_for_otherSoft.R`
 
 **Purpose:** Convert `sites_CG.tsv.gz` into tool-specific formats.
 
@@ -276,7 +276,7 @@ Convert the simulated site-level data into the input formats required by each co
 
 ```bash
 cd benchmarking
-Rscript 03.convert_sites_for_otherSoft.R ../results/site_window_sim/tsv/sites_CG.tsv.gz
+Rscript convert_sites_for_otherSoft.R ../results/site_window_sim/tsv/sites_CG.tsv.gz
 ```
 
 **Inputs:**
@@ -303,13 +303,13 @@ Each tool is run independently on the converted data.
 
 ### DSS (Differentially Methylated Sites via Shrinkage)
 
-**Script:** `benchmarking/04.run_DSS.R`
+**Script:** `benchmarking/run_DSS.R`
 
 **Usage:**
 
 ```bash
 cd benchmarking
-Rscript 04.run_DSS.R
+Rscript run_DSS.R
 ```
 
 **What it does:**
@@ -330,25 +330,29 @@ Rscript 04.run_DSS.R
 
 ### methylKit (Diffmeth + Tiling)
 
-**Script:** `benchmarking/04.run_methylKit.R`
+**Script:** `benchmarking/run_methylKit.R`
 
 **Usage:**
 
 ```bash
 cd benchmarking
-Rscript 04.run_methylKit.R
+Rscript run_methylKit.R
 ```
 
 **What it does:**
 - Reads per-sample methylKit files from `output_for_methylKit/`
 - Filters coverage: `lo.count=5`, `hi.perc=99.9`
 - Creates tiles (window size 300 bp, step 200 bp)
-- Calls differential methylation with `qvalue=0.05`
+- Calls differential methylation on tiles
+- Extracts significant tiles with `qvalue=0.05`
+- Merges adjacent significant tiles (merge gap: 200 bp)
 
 **Outputs:**
 - `output_for_methylKit/methylKit_diff.tsv`: tile-level results
+- `output_for_methylKit/methylKit_dmrs.tsv`: significant tile-level DMRs
+- `output_for_methylKit/methylKit_dmrs_merged.tsv`: merged DMR intervals
 
-**Customization:** Edit script to adjust tile size (`win.size`), step (`step.size`), or q-value threshold.
+**Customization:** Edit script to adjust tile size (`win.size`), step (`step.size`), q-value threshold, or merge gap.
 
 ---
 
@@ -356,7 +360,7 @@ Rscript 04.run_methylKit.R
 
 Compare detected DMRs across all methods against ground truth.
 
-### Script: `benchmarking/05.evaluate_dmrs.R`
+### Script: `benchmarking/evaluate_dmrs.R`
 
 **Purpose:** Compare DMR detection methods (e.g., glmmDMR Simes vs Stouffer vs combined) and visualize performance metrics.
 
@@ -364,7 +368,7 @@ Compare detected DMRs across all methods against ground truth.
 
 ```bash
 cd benchmarking
-Rscript 05.evaluate_dmrs.R \
+Rscript evaluate_dmrs.R \
   --simes ../glmmDMR_results/dmrs_simes.tsv \
   --stouffer ../glmmDMR_results/dmrs_stouffer.tsv \
   --combined ../glmmDMR_results/dmrs_combined.tsv \
@@ -394,20 +398,20 @@ Rscript 05.evaluate_dmrs.R \
 
 # Step 1: Convert formats
 cd benchmarking
-Rscript 03.convert_sites_for_otherSoft.R ../results/site_window_sim/tsv/sites_CG.tsv.gz
+Rscript convert_sites_for_otherSoft.R ../results/site_window_sim/tsv/sites_CG.tsv.gz
 
 # Step 2: Run each tool
 echo "Running DSS..."
-time Rscript 04.run_DSS.R
+time Rscript run_DSS.R
 
 echo "Running methylKit..."
-time Rscript 04.run_methylKit.R
+time Rscript run_methylKit.R
 
 # (Also run glmmDMR on the same data using ../scripts/run_glmmDMR.R)
 
 # Step 3: Evaluate results
 echo "Evaluating results..."
-Rscript 05.evaluate_dmrs.R \
+Rscript evaluate_dmrs.R \
   --simes ../glmmDMR_results/windows_CG_fit_beta_pooled_dmr_dmrs_simes.tsv \
   --stouffer ../glmmDMR_results/windows_CG_fit_beta_pooled_dmr_dmrs_stouffer.tsv \
   --combined ../glmmDMR_results/windows_CG_fit_beta_pooled_dmr_dmrs_combined.tsv \
@@ -422,8 +426,8 @@ echo "Done! Results in results/comparison_*.pdf and results/comparison_summary.t
 
 To integrate a new DMR detection tool:
 
-1. **Add format conversion** in `03.convert_sites_for_otherSoft.R` (create new `output_for_TOOL/` directory)
-2. **Create run script** `04.run_TOOL.R` with:
+1. **Add format conversion** in `convert_sites_for_otherSoft.R` (create new `output_for_TOOL/` directory)
+2. **Create run script** `run_TOOL.R` with:
    - Tool-specific parameter setup
    - DMR calling code
    - Output saved as TSV (columns: chr, start, end, [p-value, etc.])
