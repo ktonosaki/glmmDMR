@@ -4,13 +4,10 @@
 
 glmmDMR is a statistical framework for replicate-aware detection of differentially methylated regions (DMRs) from whole-genome bisulfite sequencing (WGBS), enzymatic methyl-seq (EM-seq), or Oxford Nanopore Technologies (ONT) methylation data. The framework integrates generalized linear mixed models (GLMMs) with a seed-based region construction strategy to improve detection accuracy and reduce false positives driven by replicate-level methylation variability.
 
-glmmDMR consists of three core components:
+glmmDMR consists of two core components:
 
-1. **Window-level data organization**: cytosine sites are organized into fixed-length sliding windows while preserving site-level methylation information across samples and replicates.
-2. **Replicate-aware statistical modeling**: methylation data within each window are modeled using a GLMM that treats group identity as a fixed effect and biological replicates as random effects, explicitly capturing replicate-level variability without prior aggregation.
-3. **Seed-based DMR construction**: window-level statistical signals are integrated into DMRs using one of three seed strategies — `single_seed`, `multi_seed`, or `hybrid_seed` — each initiating region construction from locally high-confidence windows and expanding based on directional consistency and Stouffer-combined p-values.
-
-> **Key finding**: False-positive DMR detections are strongly associated with genomic regions showing high replicate-level methylation variability, rather than simply with weak methylation differences. glmmDMR addresses this directly through GLMM-based variance modeling.
+1. **Replicate-aware statistical modeling**: methylation data within each window are modeled using a GLMM that treats group identity as a fixed effect and biological replicates as random effects, explicitly capturing replicate-level variability without prior aggregation.
+2. **Seed-based DMR construction**: window-level statistical signals are integrated into DMRs using one of three seed strategies — `single_seed`, `multi_seed`, or `hybrid_seed` — each initiating region construction from locally high-confidence windows and expanding based on directional consistency and Stouffer-combined p-values.
 
 ---
 
