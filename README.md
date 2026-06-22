@@ -152,7 +152,7 @@ python summarize_extractor.py \
 If your input is ONT methylation calls from [modkit](https://github.com/nanoporetech/modkit) `pileup` (BED/BED.GZ), convert it to the same Step-1 output format (`chr, pos, strand, meth, unmeth, context`) before running `BinomTest.py`.
 
 For ONT-derived counts, running `BinomTest.py` is also recommended in this workflow to keep the same site-level significance filtering step before window construction.
-Reference: Iwamura et al., *The Horticulture Journal* (2026), https://doi.org/10.2503/hortj.szd-125
+Reference: Iwamura et al., *Hort J.* (2026), https://doi.org/10.2503/hortj.szd-125
 
 ```bash
 python scripts/modkit_bed_to_binom_input.py \
