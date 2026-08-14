@@ -149,7 +149,8 @@ process_group() {
         zcat "$f" | awk -v OFS='\t' -v c="$context" -v g="$label" -v s="$sample_id" '
             NR>1 && $6 == c {
                 cov = $4 + $5;
-                print $1, $2, $2+1, $6, g, s, $3, $4, $5, cov
+                # Bismark pos is 1-based; BED is 0-based, half-open.
+                print $1, $2-1, $2, $6, g, s, $3, $4, $5, cov
             }
         ' > "$tmpdir/${label}_${base}_${context}_cytosines.bed"
     done
